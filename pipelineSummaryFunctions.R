@@ -11,11 +11,29 @@ organizeAllGageData <- function(gageInfo,
   # Where to store everything
   Results <- list()
   
+  # make a template in case no data comes in for joining later
+  template <- tibble(.rows = 0,
+                     agency_cd = character(),
+                     site_no = character(),
+                     dateTime = as.POSIXct(character(), tz = 'America/New_York'),
+                     Wtemp_Inst = numeric(),
+                     Wtemp_Inst_cd = character(),
+                     #GH_Inst = numeric(),
+                     #GH_Inst_cd = character(),
+                     SpecCond_Inst = numeric(),
+                     SpecCond_Inst_cd = character(),
+                     DO_Inst = numeric(),
+                     DO_Inst_cd = character(),
+                     pH_Inst = numeric(),
+                     pH_Inst_cd = character(),
+                     Turb_Inst = numeric(),
+                     Turb_Inst_cd = character(),
+                     tz_cd = character()  )
+  
   # the actual data pull
   for(j in a[seq(1,n,2)]){ 
     print(j)
     #j = 1
-    
     
     upstreamData <- NWISpull(paste(0,gageInfo$`USGS Station ID`[j],sep=''),
                              reportDurationStart, reportDurationEnd)
@@ -31,7 +49,17 @@ organizeAllGageData <- function(gageInfo,
     downstreamData <- NWISpull(paste(0,gageInfo$`USGS Station ID`[j+1],sep=''),
                                reportDurationStart, reportDurationEnd)
     
-    together <- full_join(upstreamData,downstreamData,by=c('agency_cd','dateTime')) 
+    # Before joining, make sure all columns exists in case no data comes back from one (or both) gages
+    upstreamData <- bind_rows(template, upstreamData)
+    downstreamData <- bind_rows(template, downstreamData)
+    
+    together <- full_join(upstreamData,downstreamData,by=c('agency_cd','dateTime')) %>%
+    # and add in appropriate information if missing data in join
+      mutate(site_no.x = case_when(is.na(site_no.x) ~ paste0(0,gageInfo$`USGS Station ID`[j]),
+                                   TRUE ~ site_no.x),
+             site_no.y = case_when(is.na(site_no.y) ~ paste0(0,gageInfo$`USGS Station ID`[j+1]),
+                                   TRUE ~ site_no.y))
+    
     
     gageResults <- suppressWarnings(
       dataScan(upstreamData, downstreamData, 

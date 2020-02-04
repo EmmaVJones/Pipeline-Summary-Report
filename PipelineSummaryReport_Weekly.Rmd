@@ -19,7 +19,7 @@ source('reportFunctions.R')
 source('pipelineSummaryFunctions.R')
 
 # Daily or Weekly report?
-reportType <- 'Daily' #'Weekly'
+reportType <- 'Weekly' #'Daily' 
 reportDurationStart <- if(reportType == 'Daily'){
   Sys.Date()-2
 } else {

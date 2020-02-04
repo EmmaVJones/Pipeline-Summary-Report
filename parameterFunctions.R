@@ -291,7 +291,8 @@ turbidity <- function(upstreamData, downstreamData, parameter, turbidityBaseline
            turbidity_valid30minuteWindow=dateTime-lag(dateTime,6)) # lag 6 bc lag already grabs 1 row above
   
   # Calculate Baseline Turbidity for 2hr window 
-  if(!all(is.na(together$upstream)) | !all(is.na(together$downstream))){
+  #######Old method, but bombs if no data present: if(!all(is.na(together$upstream)) | !all(is.na(together$downstream))){
+  if( all( !all(is.na(together$upstream)) , !all(is.na(together$downstream)) ) ){
     turbidityBaseline <- max(median(together$upstream,na.rm=T),median(together$downstream,na.rm=T))
   }else{turbidityBaseline <- turbidityBaseline}
   

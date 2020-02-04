@@ -332,7 +332,8 @@ SpCond <- function(upstreamData, downstreamData, parameter, SpCond_Designation){
 #' 	
 turbidity <- function(upstreamData, downstreamData, parameter, turbidityBaseline, turbidity99th1, turbidity99th2){
   # only run function if Turbidity data came from both datasets
-  if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(upstreamData))){
+  if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(upstreamData)) &
+     nrow(upstreamData) !=0 ){
     UP <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,parameter)%>%rename(upstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
     # If gage height data available at gage then grab that, too
     if("GH_Inst" %in% names(upstreamData)){
@@ -346,7 +347,8 @@ turbidity <- function(upstreamData, downstreamData, parameter, turbidityBaseline
     }else{gh <- dplyr::select(upstreamData,agency_cd,dateTime)%>%
       mutate(site_noGH=NA,GH_Inst=NA)%>%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}
   }else{UP <- select(upstreamData,agency_cd,site_no,dateTime)%>%mutate(upstream=NA)}
-  if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(downstreamData))){
+  if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(downstreamData)) &
+     nrow(downstreamData) !=0 ){
     DOWN <- dplyr::select(downstreamData,agency_cd,site_no,dateTime,parameter)%>%rename(downstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
     # If gage height data available at gage then grab that, too
     if("GH_Inst" %in% names(downstreamData)){
@@ -376,7 +378,6 @@ turbidity <- function(upstreamData, downstreamData, parameter, turbidityBaseline
            turbidity_valid30minuteWindow=dateTime-lag(dateTime,6)) # lag 6 bc lag already grabs 1 row above
   
   # Calculate Baseline Turbidity for 2hr window 
-  #######Old method, but bombs if no data present: if(!all(is.na(together$upstream)) | !all(is.na(together$downstream))){
   if( all( !all(is.na(together$upstream)) , !all(is.na(together$downstream)) ) ){
     turbidityBaseline <- max(median(together$upstream,na.rm=T),median(together$downstream,na.rm=T))
   }else{turbidityBaseline <- turbidityBaseline}

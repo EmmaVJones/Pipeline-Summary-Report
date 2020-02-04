@@ -1,0 +1,31 @@
+---
+title: "test NWIS pull"
+author: "Emma Jones"
+date: "2/3/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(tidyquant)
+library(crosstalk)
+library(plotly)
+library(DT)
+library(dataRetrieval)
+
+gageInfo <- read_csv('data/gageInfoEVJ.csv')
+source('parameterFunctions[rmd2r].R')
+source('reportFunctions.R')
+source('pipelineSummaryFunctions.R')
+
+```
+
+pull data
+
+```{r}
+print(NWISpull(paste(0,gageInfo$`USGS Station ID`[1],sep=''),
+                              Sys.Date()-2,Sys.Date()))
+```
+

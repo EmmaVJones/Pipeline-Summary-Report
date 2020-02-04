@@ -1,0 +1,13 @@
+name: pipelinesummaryreport
+title: PipelineSummaryReport
+username: test_admin
+account: test_admin
+server: deq-rstudio-prod.cov.virginia.gov
+hostUrl: http://deq-rstudio-prod.cov.virginia.gov:3939/__api__
+appId: 21
+bundleId: 30
+url: http://deq-rstudio-prod.cov.virginia.gov:3939/content/21/
+when: 1580747343.77464
+asMultiple: TRUE
+asStatic: FALSE
+ignoredFiles: PipelineSummaryReport_Weekly.Rmd
