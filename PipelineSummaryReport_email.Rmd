@@ -4,31 +4,8 @@ output:
     theme: flatly
 ---
 
-```{r setup, include=FALSE}
+```{r include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
-library(tidyverse)
-library(tidyquant)
-library(crosstalk)
-library(plotly)
-library(DT)
-library(dataRetrieval)
-library(blastula)
-#library(glue)
-
-gageInfo <- read_csv('data/gageInfoEVJ.csv')
-source('parameterFunctions[rmd2r].R')
-source('reportFunctions.R')
-source('pipelineSummaryFunctions.R')
-
-# Daily or Weekly report?
-reportType <- 'Daily' #'Weekly'
-reportDurationStart <- if(reportType == 'Daily'){
-  Sys.Date()-2
-} else {
-  Sys.Date()-8
-}
-
-reportDurationEnd <- Sys.Date()-1
 
 ```
 
@@ -46,56 +23,16 @@ title: "Pipeline Summary Report: `r format(reportDurationStart, '%m/%d/%Y')` - `
 
 This document summarizes provisional USGS data from upstream/downstream gage pairs monitoring the MVP and ACP pipeline stream crossings. The report allows users to review flagged results from any of the USGS real time pipeline monitoring gages. At the bottom of the report is a table of all gages monitored for the pipeline monitoring project. Individual gage thresholds unique to each gage are listed in that table.
 
-
 DEQ employees may view the report on the [Connect Platform](http://deq-rstudio-prod.cov.virginia.gov/rsconnect/PipelineSummaryReport/PipelineSummaryReport.html) .
-
 
 ***
 
-
-
-
-```{r pull/organize function, include=FALSE}
-startTime <- Sys.time()
-Results <- suppressMessages(
-  suppressWarnings(organizeAllGageData(gageInfo, reportDurationStart, reportDurationEnd)))
-totalTime <- Sys.time()-startTime
-```
-
-
-
-```{r universal function, include=FALSE}
-dataScanForThreshold <- function(ResultsList, DFdesired, whatToFilter, Threshold){
-  # couldnt get quo/enquo to work with lists so just going old skool purrrr
-  
-  if(DFdesired == 'Stream Name'){num <- 1}
-  if(DFdesired == "Raw Data"){num <- 2}
-  if(DFdesired == "gageResults"){num <- 3}
-  if(DFdesired == "Missing Data"){num <- 4}
-  if(DFdesired == "Threshold Exceedances"){num <- 5}
-  
-  # choose appropriate map
-  if(num %in% c(4,5)){
-    whatToFilter_en <- enquo(whatToFilter)
-    
-    map_df(ResultsList, num) %>%
-      mutate(filterMe = as.numeric(!! whatToFilter_en)) %>% # fix bc comes in character
-      filter(filterMe >= Threshold)
-  } else{
-    map(ResultsList, num) 
-  }
-}
-
-#z <- dataScanForThreshold(Results, 'gageResults', NA,  50) 
-#dataScanForThreshold(Results, 'Missing Data', pctMissingData, 10) 
-
-```
 
 ### Parameter Exceedances 
 
 The parameters listed below exceed a threshold of 10%. See the [Monitoring System Functions](http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineMonitoringFunctions/parameterFunctions.html) page for detailed descriptions and code of how each of the analyses are conducted.
 
-```{r data manipulation, include=FALSE}
+```{r include=FALSE}
 # Calculate Threshold Exceedances
 thresholdExceedances <- dataScanForThreshold(Results, 'Threshold Exceedances', 
                                              pctExceedCurrentThreshold, 10) %>%
@@ -163,7 +100,7 @@ thresholdExceedances <- left_join(thresholdExceedances, webLink, by = c('Stream 
 
 
 
-```{r report results}
+```{r}
 datatable(thresholdExceedances,
   extensions = c('Scroller'), escape=F, rownames = F,
   options = list(dom = 't',
@@ -181,12 +118,11 @@ datatable(thresholdExceedances,
 
 
 
-
 ### Missing Data
 
 The parameters listed below are missing 10% or more data readings during the duration analyzed.
 
-```{r missingData}
+```{r}
 missingData <- dataScanForThreshold(Results, 'Missing Data', pctMissingData, 10) %>%
   mutate(`Missing Data` = format(filterMe/100, digits = 4) ) %>%# get ready for DT
   rename("Parameter" = 'parameter') %>% 
@@ -228,45 +164,5 @@ DT::datatable(gageInfoPub,extensions = c('Scroller','FixedColumns'), escape=F, r
                                fixedColumns = list(leftColumns = 2)
                                #buttons=list('copy',list(extend='excel',filename='PipelineGageInfo'))
                                ))
-```
-
-
-```{r email part, eval=FALSE}
-
-#subject <- sprintf("Daily Pipeline Monitoring Summary Report")
-
-#emailBody <- compose_email(
-#  body = md(
-#    c("Daily Report Link: http://deq-rstudio-prod.cov.virginia.gov/rsconnect/PipelineSummaryReport/PipelineSummaryReport.html")
-#  )
-#)
-
-
-# Get a nicely formatted date/time string
-#durTime1 <- format(reportDurationStart, '%m/%d/%Y')
-#durTime2 <- format(reportDurationEnd, '%m/%d/%Y')
-
-
-
-#body_text <- glue(
-#  "
-#  Hello Pipeline Monitoring Team,
-#  
-#  Attached is the daily monitoring summary for {durTime1} - {durTime2}.
-#  
-#  Cheers,
-#  
-#  Connect Software
-#  "
-#) %>% md()
-
-# above doesnt work because text is ignored by attach_connect_email() if email argument present
-
-#render_connect_email(input = "PipelineSummaryReport_email.Rmd") %>%
-#  attach_connect_email(
-#    subject = subject,
-#    attach_output = TRUE#,
-#    #attachments = c(fname)
-#)
 ```
 
