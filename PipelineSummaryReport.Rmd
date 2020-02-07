@@ -130,7 +130,7 @@ webLink <- mutate(thresholdExceedances, parameterCode = parameter) %>% # duplica
                            paramCode == 'pH' ~ '00400', 
                            paramCode == 'DO' ~ '00300',
                            paramCode == 'spCond' ~ '00095', 
-                           paramCode == 'turb' ~ '63680')) %>%
+                           paramCode == 'turbidity' ~ '63680')) %>%
   mutate(# first build the weblink
     webLink1 = paste0('https://waterdata.usgs.gov/va/nwis/uv?site_no=',
                           gageCodes,
