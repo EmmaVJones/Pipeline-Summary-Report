@@ -16,7 +16,7 @@ library(blastula)
 #library(glue)
 
 gageInfo <- read_csv('data/gageInfoEVJ.csv')
-source('parameterFunctions[rmd2r].R')
+source('parameterFunctions[rmd2r].R') # created with mindr::rmd2r('parameterFunctions.Rmd')
 source('reportFunctions.R')
 source('pipelineSummaryFunctions.R')
 
@@ -72,7 +72,7 @@ dataScanForThreshold <- function(ResultsList, DFdesired, whatToFilter, Threshold
   if(DFdesired == "Raw Data"){num <- 2}
   if(DFdesired == "gageResults"){num <- 3}
   if(DFdesired == "Missing Data"){num <- 4}
-  if(DFdesired == "Threshold Exceedances"){num <- 5}
+  if(DFdesired == "Threshold Excursions"){num <- 5}
   
   # choose appropriate map
   if(num %in% c(4,5)){
@@ -91,19 +91,19 @@ dataScanForThreshold <- function(ResultsList, DFdesired, whatToFilter, Threshold
 
 ```
 
-### Parameter Exceedances 
+### Parameter Alert 
 
-The parameters listed below exceed a threshold of 10%. See the [Monitoring System Functions](http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineMonitoringFunctions/parameterFunctions.html) page for detailed descriptions and code of how each of the analyses are conducted.
+The parameters listed below vary from defined thresholds at a rate higher than 10%. See the [Monitoring System Functions](http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineMonitoringFunctions/parameterFunctions.html) page for detailed descriptions and code of how each of the analyses are conducted.
 
 ```{r data manipulation, include=FALSE}
-# Calculate Threshold Exceedances
-thresholdExceedances <- dataScanForThreshold(Results, 'Threshold Exceedances', 
-                                             pctExceedCurrentThreshold, 10) %>%
+# Calculate Threshold Excursions
+thresholdExcursions <- dataScanForThreshold(Results, 'Threshold Excursions', 
+                                             pctFlagCurrentThreshold, 10) %>%
   group_by(`Stream Name`) %>%
-  dplyr::select(-c(pctExceedCurrentThreshold, nTweetsSent)) %>%
-  rename('pctExceedCurrentThreshold' ='filterMe') %>%
-  arrange(pctExceedCurrentThreshold) %>%
-  mutate(pctExceedCurrentThreshold = format(pctExceedCurrentThreshold/100, digits = 4) )# get ready for DT
+  dplyr::select(-c(pctFlagCurrentThreshold, nTweetsSent)) %>%
+  rename('pctFlagCurrentThreshold' ='filterMe') %>%
+  arrange(pctFlagCurrentThreshold) %>%
+  mutate(pctFlagCurrentThreshold = format(pctFlagCurrentThreshold/100, digits = 4) )# get ready for DT
 
 
 ## Gage Height Changes for Streams listed above
@@ -123,23 +123,24 @@ gageTranslation <- dplyr::select(gageInfo, `Stream Name`, `USGS Station ID`) %>%
   dplyr::select(`Stream Name`, gageCodes)
   
 
-webLink <- mutate(thresholdExceedances, parameterCode = parameter) %>% # duplicate column for joining later
+webLink <- mutate(thresholdExcursions, parameterCode = parameter) %>% # duplicate column for joining later
   separate(parameterCode, into = c('paramCode',NA)) %>%
   left_join(gageTranslation, by = 'Stream Name') %>%
-  mutate(paramCode = case_when(paramCode == 'temp' ~ '00010', 
-                           paramCode == 'pH' ~ '00400', 
-                           paramCode == 'DO' ~ '00300',
-                           paramCode == 'spCond' ~ '00095', 
-                           paramCode == 'turbidity' ~ '63680')) %>%
+  mutate(paramCode = case_when(paramCode %in% c('temp', 'T') ~ '00010', 
+                               paramCode == 'pH' ~ '00400', 
+                               paramCode == 'DO' ~ '00300',
+                               paramCode == 'spCond' ~ '00095', 
+                               paramCode == 'turbidity' ~ '63680')) %>%
   mutate(# first build the weblink
     webLink1 = paste0('https://waterdata.usgs.gov/va/nwis/uv?site_no=',
-                          gageCodes,
-                          '&format=gif_mult_sites&PARAmeter_cd=',
-                          paramCode,
-                          '&period=7'),
+                      gageCodes,
+                      '&format=gif_mult_sites&PARAmeter_cd=',
+                      paramCode,
+                      "&period=&begin_date=", reportDurationEnd - 7,
+                      "&end_date=",reportDurationEnd), #'&period=7'),
     # then convert to a html format DT can handle in pretty way
     `NWIS Web Link` = paste0("<a href='",webLink1, "'>View Data On NWIS</a>")) %>%
-  select(-c(webLink1,pctExceedCurrentThreshold, paramCode, gageCodes))
+  select(-c(webLink1,pctFlagCurrentThreshold, paramCode, gageCodes))
 
 
 
@@ -152,11 +153,17 @@ weatherLink <- dplyr::select(gageInfo, `Stream Name`, Latitude, Longitude) %>%
 
 
 
-# Join weblink back to thresholdExceedances
-thresholdExceedances <- left_join(thresholdExceedances, webLink, by = c('Stream Name', 'parameter')) %>%
+# Join weblink back to thresholdExcursions
+thresholdExcursions <- left_join(thresholdExcursions, webLink, by = c('Stream Name', 'parameter')) %>%
   left_join(weatherLink, by = 'Stream Name') %>%
-  rename('Exceeding Threshold' = 'pctExceedCurrentThreshold',
-         'Parameter' = 'parameter')
+  # make it more human readable
+  separate(parameter, into = c('Parameter',"Flag")) %>%
+  mutate(Parameter = case_when(Parameter %in% c('temp', 'T','Wtemp')  ~ 'Temperature',
+                               Parameter == 'pH' ~ 'pH',
+                               Parameter == 'DO' ~ 'Dissolved Oxygen',
+                               Parameter %in% c('spCond','SpecCond') ~ 'Specific Conductivity', 
+                               Parameter %in% c('turbidity','Turb') ~ 'Turbidity')) %>%
+  rename('Percent of Data Flagged In Window' = 'pctFlagCurrentThreshold')
 
 ```
 
@@ -164,18 +171,18 @@ thresholdExceedances <- left_join(thresholdExceedances, webLink, by = c('Stream 
 
 
 ```{r report results}
-datatable(thresholdExceedances,
+datatable(thresholdExcursions,
   extensions = c('Scroller'), escape=F, rownames = F,
   options = list(dom = 't',
-                 pageLength=nrow(thresholdExceedances), 
+                 pageLength=nrow(thresholdExcursions), 
                  lengthMenu = c(2, 5, 10, 20),
                  scrollX = TRUE,
                  scrollY = 200,
                  scroller = TRUE#,
                  #buttons=list('copy',list(extend='excel',filename=paste0(format(Sys.Date(),'%m-%d-%Y'),
-                                                                         #'_thresholdExceedances'))
+                                                                         #'_thresholdExcursions'))
                                                                          )) %>%
-  formatPercentage(columns=c('Exceeding Threshold'), digits = 1)
+  formatPercentage(columns=c('Percent of Data Flagged In Window'), digits = 1)
 
 ```
 
@@ -187,11 +194,22 @@ datatable(thresholdExceedances,
 The parameters listed below are missing 10% or more data readings during the duration analyzed.
 
 ```{r missingData}
-missingData <- dataScanForThreshold(Results, 'Missing Data', pctMissingData, 10) %>%
+missingData <- suppressWarnings(
+  dataScanForThreshold(Results, 'Missing Data', pctMissingData, 10) %>%
   mutate(`Missing Data` = format(filterMe/100, digits = 4) ) %>%# get ready for DT
-  rename("Parameter" = 'parameter') %>% 
-  dplyr::select(-c(pctMissingData, filterMe)) %>%
-  arrange(`Missing Data`)
+  # make it more human readable
+  separate(parameter, into = c('Parameter','Inst', "Gage")) %>%
+  mutate(Parameter = case_when(Parameter %in% c('temp', 'T','Wtemp')  ~ 'Temperature',
+                               Parameter == 'pH' ~ 'pH',
+                               Parameter == 'DO' ~ 'Dissolved Oxygen',
+                               Parameter %in% c('spCond','SpecCond') ~ 'Specific Conductivity', 
+                               Parameter %in% c('turbidity','Turb') ~ 'Turbidity',
+                               Parameter == 'GH' ~ "Gage Height"),
+         Gage = case_when(Gage == 'upstream' ~ 'Upstream',
+                          Gage == 'downstream'  ~ 'Downstream',
+                          TRUE ~ as.character(Gage))) %>%
+  dplyr::select(-c(pctMissingData, filterMe, Inst)) %>%
+  arrange(`Missing Data`))
 
 datatable(missingData,
   extensions = c('Scroller'), escape=F, rownames = F,

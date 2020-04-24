@@ -102,10 +102,10 @@ turbidityWholeRecord <- function(upstreamData, downstreamData, parameter, turbid
       width      = 7,
       align      = "right",
       by.column  = FALSE,
-      FUN        = turbidityNumericThreshold,
+      FUN        = turbidityNumericFlag,
       # FUN args
       threshold  = 5.999999999) %>% 
-    dplyr::rename(NumericTurbidity_Exceedance=turbidity_Exceedance)%>%
+    dplyr::rename(NumericTurbidity_Flag=turbidity_Flag)%>%
     tq_mutate(
       select     = pctDiff,
       mutate_fun = rollapply, 
@@ -113,17 +113,17 @@ turbidityWholeRecord <- function(upstreamData, downstreamData, parameter, turbid
       width      = 7,
       align      = "right",
       by.column  = FALSE,
-      FUN        = turbidityPercentThreshold, 
+      FUN        = turbidityPercentFlag, 
       # FUN args
       threshold  = 14.99999999)%>% #,col_rename = 'PercentExceedance')%>% # col_rename doesnt workwith tibbles
-    dplyr::rename(PercentTurbidity_Exceedance=turbidity_Exceedance)%>%
+    dplyr::rename(PercentTurbidity_Flag=turbidity_Flag)%>%
     rowwise()%>%select(-turbidity_NAs..1)%>%
     # for < 3.6.0
     #rowwise()%>%select(-turbidity_NAs.1)%>%
     mutate(baselineTurbidity=max(upstreamMedian,downstreamMedian,na.rm=T),
            # the money part           
-           exceedance=ifelse(baselineTurbidity<=40,NumericTurbidity_Exceedance,
-                             PercentTurbidity_Exceedance),
+           exceedance=ifelse(baselineTurbidity<=40,NumericTurbidity_Flag,
+                             PercentTurbidity_Flag),
            exceedanceType=ifelse(baselineTurbidity<=40,'Numeric',"Percent")) %>%
     tq_mutate(
       select     = upstream,
@@ -132,12 +132,12 @@ turbidityWholeRecord <- function(upstreamData, downstreamData, parameter, turbid
       width      = 7,
       align      = "right",
       by.column  = FALSE,
-      FUN        = turbidityNumericThreshold,
+      FUN        = turbidityNumericFlag,
       # FUN args
       threshold  = turbidity99th1) %>%
-    rename(turbidity_upstreamExceed99th=turbidity_Exceedance,turbidity_upstreamNAs=turbidity_NAs..1)%>%
+    rename(turbidity_upstreamFlag99th=turbidity_Flag,turbidity_upstreamNAs=turbidity_NAs..1)%>%
     # for < R version 3.6.0
-    #rename(turbidity_upstreamExceed99th=turbidity_Exceedance,turbidity_upstreamNAs=turbidity_NAs.1)%>%
+    #rename(turbidity_upstreamFlag99th=turbidity_Flag,turbidity_upstreamNAs=turbidity_NAs.1)%>%
     tq_mutate(
       select     = downstream,
       mutate_fun = rollapply, 
@@ -145,29 +145,29 @@ turbidityWholeRecord <- function(upstreamData, downstreamData, parameter, turbid
       width      = 7,
       align      = "right",
       by.column  = FALSE,
-      FUN        = turbidityNumericThreshold,
+      FUN        = turbidityNumericFlag,
       # FUN args
       threshold  = turbidity99th2) %>%
-    rename(turbidity_downstreamExceed99th=turbidity_Exceedance,turbidity_downstreamNAs=turbidity_NAs..1) 
+    rename(turbidity_downstreamFlag99th=turbidity_Flag,turbidity_downstreamNAs=turbidity_NAs..1) 
     # for < R version 3.6.0
-    #rename(turbidity_downstreamExceed99th=turbidity_Exceedance,turbidity_downstreamNAs=turbidity_NAs.1) 
+    #rename(turbidity_downstreamFlag99th=turbidity_Flag,turbidity_downstreamNAs=turbidity_NAs.1) 
   
   
   validData <- filter(together,turbidity_valid30minuteWindow==30)
   # make a list object to output multiple dataframes of important data
   savedData <- list()
-  savedData[['upDownNumericExceed']] <- filter(validData,exceedance>0 & exceedanceType=='Numeric' & turbidity_NAs <= 3) # Only allow up to 3 missing turbidity reading per half hour window
-  savedData[['upDownPercentExceed']] <- filter(validData,exceedance>0 & exceedanceType=='Percent' & turbidity_NAs <= 3)
-  savedData[['upstreamExceed99']] <- filter(validData,turbidity_upstreamExceed99th>0  & turbidity_upstreamNAs <= 3)
-  savedData[['downstreamExceed99']] <- filter(validData,turbidity_downstreamExceed99th>0  & turbidity_downstreamNAs <= 3)
+  savedData[['upDownNumericFlag']] <- filter(validData,exceedance>0 & exceedanceType=='Numeric' & turbidity_NAs <= 3) # Only allow up to 3 missing turbidity reading per half hour window
+  savedData[['upDownPercentFlag']] <- filter(validData,exceedance>0 & exceedanceType=='Percent' & turbidity_NAs <= 3)
+  savedData[['upstreamFlag99']] <- filter(validData,turbidity_upstreamFlag99th>0  & turbidity_upstreamNAs <= 3)
+  savedData[['downstreamFlag99']] <- filter(validData,turbidity_downstreamFlag99th>0  & turbidity_downstreamNAs <= 3)
   
   
-  savedData[['exceedThreshold']] <- data.frame(parameter=c('turbidity_upDownNumericExceed','turbidity_upDownPercentExceed',
-                                                           'turbidity_upstreamExceed99','turbidity_downstreamExceed99'),
-                                               pctExceedCurrentThreshold=c((nrow(savedData[['upDownNumericExceed']])/nrow(together))*100,
-                                                                           (nrow(savedData[['upDownPercentExceed']])/nrow(together))*100,
-                                                                           (nrow(savedData[['upstreamExceed99']])/nrow(together))*100,
-                                                                           (nrow(savedData[['downstreamExceed99']])/nrow(together))*100))
+  savedData[['flags']] <- data.frame(parameter=c('turbidity_upDownNumericFlag','turbidity_upDownPercentFlag',
+                                                           'turbidity_upstreamFlag99','turbidity_downstreamFlag99'),
+                                               pctFlagCurrentThreshold=c((nrow(savedData[['upDownNumericFlag']])/nrow(together))*100,
+                                                                           (nrow(savedData[['upDownPercentFlag']])/nrow(together))*100,
+                                                                           (nrow(savedData[['upstreamFlag99']])/nrow(together))*100,
+                                                                           (nrow(savedData[['downstreamFlag99']])/nrow(together))*100))
   
   return(savedData)
 }
@@ -175,8 +175,8 @@ turbidityWholeRecord <- function(upstreamData, downstreamData, parameter, turbid
 
 #  upDownNumericExceed <- filter(validData,exceedance>0 & exceedanceType=='Numeric' & turbidity_NAs <= 3) # Only allow up to 3 missing turbidity reading per half hour window
 #  upDownPercentExceed <- filter(validData,exceedance>0 & exceedanceType=='Percent' & turbidity_NAs <= 3)
-#  upstreamExceed99 <- filter(validData,turbidity_upstreamExceed99th>0  & turbidity_upstreamNAs <= 3)
-#  downstreamExceed99 <- filter(validData,turbidity_downstreamExceed99th>0  & turbidity_downstreamNAs <= 3)
+#  upstreamExceed99 <- filter(validData,turbidity_upstreamFlag99th>0  & turbidity_upstreamNAs <= 3)
+#  downstreamExceed99 <- filter(validData,turbidity_downstreamFlag99th>0  & turbidity_downstreamNAs <= 3)
   
   
 #  exceedThreshold <- data.frame(parameter=c('turbidity_upDownNumericExceed','turbidity_upDownPercentExceed',

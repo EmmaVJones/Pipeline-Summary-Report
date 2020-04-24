@@ -450,15 +450,15 @@ summary {
   allUnitData &lt;- renameNWISColumns(allUnitData)
 }</code></pre>
 </div>
-<div id="simple-exceedance-of-threshold-calculations" class="section level3">
-<h3>Simple Exceedance of Threshold Calculations</h3>
+<div id="criteria-flags" class="section level3">
+<h3>Criteria Flags</h3>
 <p>These functions are used within other functions to significantly reduce the amount of code required to do said analyses.</p>
-<p>Compare data to a numeric threshold.</p>
+<p>Compare data to a numeric criteria.</p>
 <pre class="r"><code>numericThreshold &lt;- function(x, threshold){
   suppressWarnings(
     if(min(x,na.rm=T)==Inf){NA
     }else{ifelse(min(x,na.rm=T)&gt;threshold,1,0) })}</code></pre>
-<p>Compare data to a percent threshold.</p>
+<p>Compare data to a percentage criteria.</p>
 <pre class="r"><code>percentThreshold &lt;- function(x,threshold){  
   suppressWarnings(
     if(min(x,na.rm=T)==Inf){NA
@@ -467,27 +467,27 @@ summary {
 <pre class="r"><code>NArecords &lt;- function(x){
   sum(is.na(x))
 }</code></pre>
-<p>Temperature and turbidity require their own numeric and percent (in the case of turbidity) threshold calculations to efficiently output multiple results from rolling windows when applied to the tidyquant::tq_mutate function.</p>
-<p>Compare maximum and minimum temperature data to numeric threshold, and output associated NA’s. This function is applied to a window of data to find the maximum hourly change according to 9VAC25-260-70.</p>
+<p>Temperature and turbidity require their own numeric and percentage (in the case of turbidity) criteria flags to efficiently output multiple results from rolling windows when applied to the tidyquant::tq_mutate function.</p>
+<p>Compare maximum and minimum temperature data to numeric criteria, and output associated NA’s. This function is applied to a window of data to find the maximum hourly change according to 9VAC25-260-70.</p>
 <pre class="r"><code>temperatureHourlyChange &lt;- function(x,threshold){
   Tchange &lt;- max(x, na.rm=T)-min(x, na.rm=T)
   NAs &lt;- NArecords(x)
-  violation &lt;- ifelse(Tchange&gt;threshold,1,0)
-  z &lt;- c(T_maxHourlyChange=Tchange, T_hourlyChangeViolation=violation,T_NAs=NAs)
+  flag &lt;- ifelse(Tchange&gt;threshold,1,0)
+  z &lt;- c(T_maxHourlyChange=Tchange, T_hourlyChangeFlag=flag,T_NAs=NAs)
   return(z)
 }</code></pre>
-<p>Compare turbidity data to numeric threshold and output associated NA’s.</p>
-<pre class="r"><code>turbidityNumericThreshold &lt;- function(x,threshold){
+<p>Compare turbidity data to numeric criteria and output associated NA’s.</p>
+<pre class="r"><code>turbidityNumericFlag &lt;- function(x,threshold){
   exceed &lt;- numericThreshold(x,threshold)
   NAs &lt;- NArecords(x)
-  z &lt;- c(turbidity_Exceedance=exceed,turbidity_NAs=NAs)
+  z &lt;- c(turbidity_Flag=exceed,turbidity_NAs=NAs)
   return(z)
 }</code></pre>
-<p>Compare turbidity data to percent threshold and output associated NA’s.</p>
-<pre class="r"><code>turbidityPercentThreshold &lt;- function(x,threshold){
+<p>Compare turbidity data to percentage criteria and output associated NA’s.</p>
+<pre class="r"><code>turbidityPercentFlag &lt;- function(x,threshold){
   exceed &lt;- numericThreshold(x,threshold)
   NAs &lt;- NArecords(x)
-  z &lt;- c(turbidity_Exceedance=exceed,turbidity_NAs=NAs)
+  z &lt;- c(turbidity_Flag=exceed,turbidity_NAs=NAs)
   return(z)
 }</code></pre>
 </div>
@@ -496,12 +496,12 @@ summary {
 <p>These next functions complete the analyses for each of the parameters pulled from the NWIS server. The functions have specific rules within them to handle missing data (NA’s), data out of a normal range (probe malfunctions), and data transmission failures.</p>
 <div id="temperature" class="section level4">
 <h4>Temperature</h4>
-<p>temperatureByWQSclass() is a helper function that operates inside of the temperature function. Henceforth, whenever describing a named function, the name of the function will be followed by () signify it is a function, e.g. temperature(). The temperatureByWQSclass() takes a dataset manipulated within the temperature() and applies specific water quality standard (WQS) class threshold to on an hourly window of data to identify windows that are outside of the threshold set by WQS class. The temperature() replaces data that is outside of the normal expected range for a temperature sensor in freshwater (0-40 Celsius) to avoid probe malfunctions from skewing analyses. If the input dataset (after replacement) does not meet the minimum 1 hour window criteria, it is not analyzed for the maximum change within 1 hour rule. The rolling window calculations are applied to the upstream and downstream gage datasets separately such that if one gage does not meet the hour window criteria, the other gage can still be analyzed. Data output in the T_upstreamHourlyChangeViolation/T_downstreamHourlyChangeViolation and T_upstreamNAs/T_downstreamNAs columns represent the results from each of the hour rolling window analyses, not for the entire dataset. This method allows users to verify if enough valid data was retrieved within an hour to interpret the result accurately.</p>
+<p>temperatureByWQSclass() is a helper function that operates inside of the temperature function. Henceforth, whenever describing a named function, the name of the function will be followed by () signify it is a function, e.g. temperature(). The temperatureByWQSclass() takes a dataset manipulated within the temperature() and applies specific water quality standard (WQS) class criteria to on an hourly window of data to identify windows that are outside of the criteria set by WQS class. The temperature() replaces data that are outside of the normal expected range for a temperature sensor in freshwater (0-40 Celsius) to avoid probe malfunctions from skewing analyses. If the input dataset (after replacement) does not meet the minimum 1 hour window criteria, it is not analyzed for the maximum change within 1 hour rule. The rolling window calculations are applied to the upstream and downstream gage datasets separately such that if one gage does not meet the hour window criteria, the other gage can still be analyzed. Data output in the T_upstreamHourlyChangeFlag/T_downstreamHourlyChangeFlag and T_upstreamNAs/T_downstreamNAs columns represent the results from each of the hour rolling window analyses, not for the entire dataset. This method allows users to verify if enough valid data was retrieved within an hour to interpret the result accurately.</p>
 <pre class="r"><code># Temperature Analysis
 temperatureByWQSclass &lt;- function(x, maxHourlyTchange1, maxHourlyTchange2){
   # 9VAC25-260-70. Maximum Hourly Temperature Change, UPSTREAM
   if(nrow(filter(x,!is.na(upstream))) &lt; 13){
-    x &lt;- mutate(x,T_maxHourlyChange=NA,T_hourlyChangeViolation=NA,T_NAs=NA)
+    x &lt;- mutate(x,T_maxHourlyChange=NA,T_hourlyChangeFlag=NA,T_NAs=NA)
   }else{x &lt;- tq_mutate(x,
                        select     = upstream,
                        mutate_fun = rollapply, 
@@ -514,7 +514,7 @@ temperatureByWQSclass &lt;- function(x, maxHourlyTchange1, maxHourlyTchange2){
                        threshold  = maxHourlyTchange1)}
   # 9VAC25-260-70. Maximum Hourly Temperature Change, DOWNSTREAM  
   if(nrow(filter(x,!is.na(downstream))) &lt; 13){
-    x &lt;- mutate(x,T_maxHourlyChange.1=NA,T_hourlyChangeViolation.1=NA,T_NAs.1=NA)
+    x &lt;- mutate(x,T_maxHourlyChange..1=NA,T_hourlyChangeFlag..1=NA,T_NAs..1=NA)
   }else{x &lt;- tq_mutate(x,
                        select     = downstream,
                        mutate_fun = rollapply, 
@@ -525,15 +525,15 @@ temperatureByWQSclass &lt;- function(x, maxHourlyTchange1, maxHourlyTchange2){
                        FUN        = temperatureHourlyChange,
                        # FUN args
                        threshold  = maxHourlyTchange2)}
-  x &lt;- rename(x, T_upstreamHourlyChangeViolation= T_hourlyChangeViolation, T_upstreamNAs= T_NAs,    
-              T_downstreamHourlyChangeViolation= T_hourlyChangeViolation..1, T_downstreamNAs=T_NAs..1)  
+  x &lt;- rename(x, T_upstreamHourlyChangeFlag= T_hourlyChangeFlag, T_upstreamNAs= T_NAs,  
+              T_downstreamHourlyChangeFlag= T_hourlyChangeFlag..1, T_downstreamNAs=T_NAs..1)    
   # for &lt; R version 3.6.0
-  #x &lt;- rename(x, T_upstreamHourlyChangeViolation= T_hourlyChangeViolation, T_upstreamNAs= T_NAs,   
-  #            T_downstreamHourlyChangeViolation= T_hourlyChangeViolation.1, T_downstreamNAs=T_NAs.1)   
+  #x &lt;- rename(x, T_upstreamHourlyChangeFlag= T_hourlyChangeFlag, T_upstreamNAs= T_NAs, 
+  #            T_downstreamHourlyChangeFlag= T_hourlyChangeFlag.1, T_downstreamNAs=T_NAs.1) 
 return(x)
 }</code></pre>
-<p>The temperature() is the function that takes raw temperature data and outputs flags based on WQS class thresholds. First, the function ensures water temperature data (Wtemp_Inst) was retrieved from each gage. If a gage has not recorded temperature data within the data window, the temperature fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
-<p>Based on the WQS class that applies to the stream segment that the gage is located on, the function establishes thresholds to test the data against for maximum temperature, natural temperature change, and maximum hourly temperature change. Natural temperature change is the difference allowed between upstream and downstream gage pairs. All WQS class thresholds applied are from 9VAC25-260-50 and 9VAC25-260-60.</p>
+<p>The temperature() is the function that takes raw temperature data and outputs flags based on WQS class criteria. First, the function ensures water temperature data (Wtemp_Inst) was retrieved from each gage. If a gage has not recorded temperature data within the data window, the temperature fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
+<p>Based on the WQS class that applies to the stream segment that the gage is located on, the function establishes criteria to test the data against for maximum temperature, natural temperature change, and maximum hourly temperature change. Natural temperature change is the difference allowed between upstream and downstream gage pairs. All WQS class criteria applied are from 9VAC25-260-50 and 9VAC25-260-60.</p>
 <p>The upstream and downstream data are joined together (using dplyr::full_join as to not lose any records if one of the gages does not have a record for a time that matches the other gage), the upstream/downstream numeric and percent difference is calculated. Percent difference is only there for visual analysis, it is not used for any flagging of data. The T_valid1hrWindow is the amount of time captured by lagging the data by 12 rows (i.e. calculating the amount of time the tq_mutate() will be rolling over). <strong>Rolling windows across time series data is very difficult</strong> Due to computational limitations, we assume the dataset is complete, meaning data was transmitted for every 5 minute interval within the hour. This assumption is critical to efficiently run any time series analysis scripts. <strong>If data is missing within the hour</strong>, T_valid1hrWindow will report a number higher than 60 (60 would be expected for a valid hour window). Given how the tq_mutate() is programmed, one would never expect a number less than 60. One should not disregard data with T_valid1hrWindow close to an exact hour, it still contains valuable information. T_upstreamNAs/T_downstreamNAs record how many NA’s are within the window. Later QA steps do not pass along notifications for windows that have too many NA’s. More on those QA steps later.</p>
 <pre class="r"><code>temperature &lt;- function(upstreamData, downstreamData, parameter, WQclassGage1, WQclassGage2){
   # Add Wtemp fields if no Wtemp data retrieved from probes, populate with NA 
@@ -544,7 +544,7 @@ return(x)
     DOWN &lt;- dplyr::select(downstreamData,agency_cd,site_no,dateTime,parameter)%&gt;%rename(downstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
   }else{DOWN &lt;- select(downstreamData,agency_cd,site_no,dateTime)%&gt;%mutate(downstream=NA)}
   
-  # Establish thresholds based on WQS for max Temperature Violations
+  # Establish thresholds based on WQS for max Temperature flags
   if(WQclassGage1==6){maxT1 &lt;- 20; natTchange &lt;- 1; maxHourlyTchange1 &lt;- 0.5}
   if(WQclassGage2==6){maxT2 &lt;- 20; natTchange &lt;- 1; maxHourlyTchange2 &lt;- 0.5}
   if(WQclassGage1==5){maxT1 &lt;- 21; natTchange &lt;- 3; maxHourlyTchange1 &lt;- 2}
@@ -566,9 +566,9 @@ return(x)
            pctDiff=(numericDiff/downstream)*100,
            window= lag(dateTime,12),
            T_valid1hrWindow=as.double(dateTime-lag(dateTime,12),units=&#39;mins&#39;), # lag 12 bc lag already grabs 1 row above
-           T_upstreamMaxViolation=ifelse(upstream&gt;maxT1,1,0),# 9VAC25-260-50. Numerical Criteria for Maximum Temperature
-           T_downstreamMaxViolation=ifelse(downstream&gt;maxT2,1,0), # 9VAC25-260-50. Numerical Criteria for Maximum Temperature
-           T_riseAboveNaturalViolation=ifelse(numericDiff&gt;natTchange,1,0)) # 9VAC25-260-60. Rise Above Natural Temperature
+           T_upstreamMaxFlag=ifelse(upstream&gt;maxT1,1,0),# 9VAC25-260-50. Numerical Criteria for Maximum Temperature
+           T_downstreamMaxFlag=ifelse(downstream&gt;maxT2,1,0), # 9VAC25-260-50. Numerical Criteria for Maximum Temperature
+           T_riseAboveNaturalFlag=ifelse(numericDiff&gt;natTchange,1,0)) # 9VAC25-260-60. Rise Above Natural Temperature
     
   temperatureByWQSclass(together, maxHourlyTchange1, maxHourlyTchange2)%&gt;%
     mutate(WQSapplied=ifelse(WQclassGage1==WQclassGage2,WQclassGage1,paste(WQclassGage1,&quot;;&quot;,WQclassGage2,sep=&quot;&quot;)))
@@ -576,16 +576,16 @@ return(x)
 </div>
 <div id="dissolved-oxygen" class="section level4">
 <h4>Dissolved Oxygen</h4>
-<p>dissolvedOxygenByWQSclass() is a helper function that operates inside dissolvedOxygen(). The function takes minimum dissolved oxygen values, established within dissolvedOxygen() using the WQS class for each gage and adhering to 9VAC25-260-50, and flags data that is below the threshold in DO_upstreamMinViolation/DO_downstreamMinViolation. Additionally, DO_upDownDifferenceViolation flags any sites where there is greater than 1 mg/L difference between the gages.</p>
+<p>dissolvedOxygenByWQSclass() is a helper function that operates inside dissolvedOxygen(). The function takes minimum dissolved oxygen values, established within dissolvedOxygen() using the WQS class for each gage and adhering to 9VAC25-260-50, and flags data that is below the criteria in DO_upstreamMinFlag/DO_downstreamMinFlag. Additionally, DO_upDownDifferenceFlag flags any sites where there is greater than 1 mg/L difference between the gages.</p>
 <pre class="r"><code>dissolvedOxygenByWQSclass &lt;- function(x,minDO1,minDO2){
-  together &lt;- mutate(x,DO_upstreamMinViolation=ifelse(upstream&lt;minDO1,1,0), # 9VAC25-260-50. Numerical Criteria for Dissolved Oxygen
-                     DO_downstreamMinViolation=ifelse(downstream&lt;minDO2,1,0),  # 9VAC25-260-50. Numerical Criteria for Dissolved Oxygen
-                     DO_upDownDifferenceViolation = ifelse(abs(numericDiff)&gt;1,1,0)) # Flag if upstream/downstream difference &gt; 1 mg/L
+  together &lt;- mutate(x,DO_upstreamMinFlag=ifelse(upstream&lt;minDO1,1,0), # 9VAC25-260-50. Numerical Criteria for Dissolved Oxygen
+                     DO_downstreamMinFlag=ifelse(downstream&lt;minDO2,1,0),  # 9VAC25-260-50. Numerical Criteria for Dissolved Oxygen
+                     DO_upDownDifferenceFlag = ifelse(abs(numericDiff)&gt;1,1,0)) # Flag if upstream/downstream difference &gt; 1 mg/L
   return(together)
 }</code></pre>
-<p>The dissolvedOxygen() analyzes raw data against the appropriate WQS class minimum dissolved oxygen thresholds for each gage. The function ensures dissolved oxygen data (DO_Inst) was retrieved from each gage. If a gage has not recorded dissolved oxygen data within the data window, the dissolved oxygen fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
-<p>Based on the WQS class that applies to the stream segment that the gage is located on, the function establishes thresholds to test the data against for minimum dissolved oxygen and maximum change between upstream and downstream gage pairs. The dissolvedOxygen() replaces data that is outside of the normal expected range for a dissolved oxygen sensor in freshwater (0-25 mg/L) to avoid probe malfunctions from skewing analyses.</p>
-<p>The upstream and downstream data are joined together (using dplyr::full_join as to not lose any records if one of the gages does not have a record for a time that matches the other gage), the upstream/downstream numeric and percent difference is calculated. Percent difference is only there for visual analysis, it is not used for any flagging of data. Lastly, the dissolvedOxygenByWQSclass() uses the minimum dissolved oxygen values established from teh appropriate WQS class and performs analyses, flagging dissolved oxygen values below the WQS and noting upstream/downstream differences.</p>
+<p>The dissolvedOxygen() analyzes raw data against the appropriate WQS class minimum dissolved oxygen criteria for each gage. The function ensures dissolved oxygen data (DO_Inst) was retrieved from each gage. If a gage has not recorded dissolved oxygen data within the data window, the dissolved oxygen fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
+<p>Based on the WQS class that applies to the stream segment that the gage is located on, the function links appropriate criteria to test the data against for minimum dissolved oxygen and maximum change between upstream and downstream gage pairs. The dissolvedOxygen() replaces data that is outside of the normal expected range for a dissolved oxygen sensor in freshwater (0-25 mg/L) to avoid probe malfunctions from skewing analyses.</p>
+<p>The upstream and downstream data are joined together (using dplyr::full_join as to not lose any records if one of the gages does not have a record for a time that matches the other gage), the upstream/downstream numeric and percent difference is calculated. Percent difference is only there for visual analysis, it is not used for any flagging of data. Lastly, the dissolvedOxygenByWQSclass() uses the minimum dissolved oxygen values established from the appropriate WQS class and performs analyses, flagging dissolved oxygen values below the WQS and noting upstream/downstream differences.</p>
 <pre class="r"><code>dissolvedOxygen &lt;- function(upstreamData, downstreamData, parameter, WQclassGage1, WQclassGage2){
   # Add DO_Inst fields if no DO_Inst data retrieved from probes, populate with NA 
   if(unique(c(&#39;DO_Inst&#39;,&quot;DO_Inst_cd&quot;) %in% names(upstreamData))){
@@ -595,7 +595,7 @@ return(x)
     DOWN &lt;- dplyr::select(downstreamData,agency_cd,site_no,dateTime,parameter)%&gt;%rename(downstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
   }else{DOWN &lt;- select(downstreamData,agency_cd,site_no,dateTime)%&gt;%mutate(downstream=NA)}
   
-  # Establish thresholds based on WQS for min DO violations
+  # Establish thresholds based on WQS for min DO flags
   if(WQclassGage1==6){minDO1 &lt;- 8}
   if(WQclassGage2==6){minDO2 &lt;- 8}
   if(WQclassGage1 %in% c(3,4,5)){minDO1 &lt;- 7}
@@ -618,18 +618,18 @@ return(x)
 </div>
 <div id="ph" class="section level4">
 <h4>pH</h4>
-<p>pHbyWQS() is a helper function that operates inside pH(). The pHbyWQS() takes a dataset manipulated within pH() and applies the approprate WQS according to 9VAC25-260-50 and any special WQS thresholds, where applicable. Data output in the pH_upstreamViolation/pH_downstreamViolation columns flag any pH values outside of the WQS for that gage. The pH_upDownDifferenceViolation columns represents the results from comparing the two gages and flags any pairs of measures that fall outside of the pH range allowed for the gage pairs. The Cowpasture is the only gage pair at present that has a pH range allowance about 0,5 standard units due to known natural spring inputs that alter pH between the gages.</p>
+<p>pHbyWQS() is a helper function that operates inside pH(). The pHbyWQS() takes a dataset manipulated within pH() and applies the approprate WQS according to 9VAC25-260-50 and any special WQS criteria where applicable. Data output in the pH_upstreamFlag/pH_downstreamFlag columns flag any pH values outside of the WQS criteria for that gage. The pH_upDownDifferenceFlag columns represents the results from comparing the two gages and flags any pairs of measures that fall outside of the pH range for the gage pairs. The Cowpasture is the only gage pair at present that has a pH range allowance above 0.5 standard units due to known natural spring inputs that alter pH between the gages.</p>
 <pre class="r"><code>pHbyWQS &lt;- function(x,pHspecialStandards,pHrangeAllowance){
   # Adjust standards if WQS special standard for site
   min_pH &lt;- ifelse(pHspecialStandards==&quot;Y&quot;,6.5,6)
   max_pH &lt;- ifelse(pHspecialStandards==&quot;Y&quot;,9.5,9)
   
-  together &lt;- mutate(x,pH_upstreamViolation=ifelse(upstream &gt; min_pH &amp; upstream &lt; max_pH,0,1), # 9VAC25-260-50. Numerical Criteria for pH
-                     pH_downstreamViolation=ifelse(downstream &gt; min_pH &amp; downstream &lt; max_pH,0,1),  # 9VAC25-260-50. Numerical Criteria for pH
-                     pH_upDownDifferenceViolation = ifelse(abs(numericDiff)&gt;pHrangeAllowance,1,0)) # Flag if upstream/downstream difference &gt; allowed range
+  together &lt;- mutate(x,pH_upstreamFlag=ifelse(upstream &gt; min_pH &amp; upstream &lt; max_pH,0,1), # 9VAC25-260-50. Numerical Criteria for pH
+                     pH_downstreamFlag=ifelse(downstream &gt; min_pH &amp; downstream &lt; max_pH,0,1),  # 9VAC25-260-50. Numerical Criteria for pH
+                     pH_upDownDifferenceFlag = ifelse(abs(numericDiff)&gt;pHrangeAllowance,1,0)) # Flag if upstream/downstream difference &gt; allowed range
   return(together)
 }</code></pre>
-<p>The pH() performs QA and manipulation prior to applying pHbyWQS() for analyzes of data against the appropriate WQS. The function ensures pH data (pH_Inst) was retrieved from each gage. If a gage has not recorded pH data within the data window, the pH fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
+<p>The pH() performs QA and manipulation prior to applying pHbyWQS() to analyze data against the appropriate WQS. The function ensures pH data (pH_Inst) was retrieved from each gage. If a gage has not recorded pH data within the data window, the pH fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
 <p>The pH() replaces data that is outside of the normal expected range for a pH sensor in freshwater (0-14 standard units) to avoid probe malfunctions from skewing analyses.</p>
 <p>The upstream and downstream data are joined together (using dplyr::full_join as to not lose any records if one of the gages does not have a record for a time that matches the other gage), the upstream/downstream numeric and percent difference is calculated. Percent difference is only there for visual analysis, it is not used for any flagging of data. Lastly, the pHbyWQS() uses the range of pH values established from the appropriate WQS and performs analyses, flagging pH values outside the WQS and noting upstream/downstream differences.</p>
 <pre class="r"><code>pH &lt;- function(upstreamData, downstreamData, parameter, pHspecialStandards, pHrangeAllowance){
@@ -656,19 +656,19 @@ return(x)
 </div>
 <div id="specific-conductivity" class="section level4">
 <h4>Specific Conductivity</h4>
-<p>SpCondByDesignation() is a helper function that operates inside SpCond(). The SpCondByDesignation() takes a dataset manipulated by SpCond() and applies the approprate Specific Conductivity threshold. Thesholds were developed for each gage by a workgroup of Regional Biologists based on watershed size, local geology, and firsthand knowledge of the macroinvertebrate and fish communities. The thresholds designate expectations for specific conductivity readings below 100 uS/cm or 500 uS/cm. Data output in the spCond_upstreamViolation/spCond_downstreamViolation columns flag any specific conductivity values above the maximum threshold for that gage. The spCond_upDownNumericDifferenceViolation column represents the results from comparing the two gages and flags any pairs of measures that are over 20% different for all gage pairs within low conductivity systems. The spCond_upDownNumericDifferenceViolation ignores upstream/downstream percent changes as these generally larger systems can maintain higher differences naturally or during storm events.</p>
+<p>SpCondByDesignation() is a helper function that operates inside SpCond(). The SpCondByDesignation() takes a dataset manipulated by SpCond() and applies the approprate Specific Conductivity criteria. Criteria were developed for each gage by a workgroup of Regional Biologists based on watershed size, local geology, and firsthand knowledge of the macroinvertebrate and fish communities. The criteria designate expectations for specific conductivity readings at 200 uS/cm or 500 uS/cm. Data output in the spCond_upstreamFlag/spCond_downstreamFlag columns flag any specific conductivity values above the maximum criteria for that gage. The spCond_upDownNumericDifferenceFlag flags results where the difference between the upstream/downstream gage pairs is higher than a criteria established by the specific conductivity expectations. The upstream/downstream numeric difference is compared against 50 uS/cm in lower conductivity systems (200 uS/cm) and against 100 uS/cm in higher conductivity systems (500 uS/cm). The spCond_upDownPercentDifferenceFlag column represents the results from comparing the two gages and flags any pairs of measures that are over 20% different for all gage pairs within low conductivity systems. The spCond_upDownPercentDifferenceFlag ignores upstream/downstream percent changes as these generally larger systems can maintain higher differences naturally or during storm events.</p>
 <pre class="r"><code>SpCondByDesignation &lt;- function(x,SpCond_Designation){
   upDownDifferenceThreshold &lt;- ifelse(SpCond_Designation==500,100,50)
   
-  mutate(x,spCond_upstreamViolation=ifelse(upstream &gt; SpCond_Designation,1,0), 
-         spCond_downstreamViolation=ifelse(downstream &gt; SpCond_Designation,1,0),
-         spCond_upDownNumericDifferenceViolation = ifelse(numericDiff&gt;upDownDifferenceThreshold,1,0)) %&gt;% # Flag if upstream/downstream numeric difference &gt; allowed range
+  mutate(x,spCond_upstreamFlag=ifelse(upstream &gt; SpCond_Designation,1,0), 
+         spCond_downstreamFlag=ifelse(downstream &gt; SpCond_Designation,1,0),
+         spCond_upDownNumericDifferenceFlag = ifelse(numericDiff&gt;upDownDifferenceThreshold,1,0)) %&gt;% # Flag if upstream/downstream numeric difference &gt; allowed range
     rowwise()%&gt;% # Make sure the upDownDifferenceThreshold p
-    mutate(spCond_upDownPercentDifferenceViolation = ifelse(upDownDifferenceThreshold==100,
+    mutate(spCond_upDownPercentDifferenceFlag = ifelse(upDownDifferenceThreshold==100,
                                                             ifelse(pctDiff&gt;20,1,0), &quot;Not Applicable&quot;)) # Flag if upstream/downstream percent difference &gt; allowed range, only for high conductivity sites
 }</code></pre>
-<p>The SpCond() performs QA and manipulation prior to applying SpCondByDesignation() for analyzes of data against the appropriate specific conductivity threshold. The function ensures specific conductivity data (SpecCond_Inst) was retrieved from each gage. If a gage has not recorded specific conductivity data within the data window, the specific conductivity fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
-<p>The SpCond() replaces data that is outside of the normal expected range for a specific conductivity sensor in freshwater (0-? uS/cm) to avoid probe malfunctions from skewing analyses.</p>
+<p>The SpCond() performs QA and manipulation prior to applying SpCondByDesignation() to analyze data against designated specific conductivity criteria. The function ensures specific conductivity data (SpecCond_Inst) was retrieved from each gage. If a gage has not recorded specific conductivity data within the data window, the specific conductivity fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
+<p>The SpCond() replaces data that is outside of the normal expected range for a specific conductivity sensor in freshwater ( &lt; 0 uS/cm) to avoid probe malfunctions from skewing analyses.</p>
 <p>The upstream and downstream data are joined together (using dplyr::full_join as to not lose any records if one of the gages does not have a record for a time that matches the other gage), the upstream/downstream numeric and percent difference is calculated. Percent difference is utilized in the SpCondByDesignation() for analysis of low conductivty streams and is used for any flagging of data from sites with this designation. Lastly, the SpCondByDesignation() uses the range of specific conductivity values established from the appropriate designations and performs analyses, flagging specific conductivity values outside the expected range and noting upstream/downstream percent differences in low conductivity sites.</p>
 <pre class="r"><code>SpCond &lt;- function(upstreamData, downstreamData, parameter, SpCond_Designation){
   # Add SpecCond_Inst fields if no SpecCond_Inst data retrieved from probes, populate with NA 
@@ -694,11 +694,11 @@ return(x)
 </div>
 <div id="turbidity" class="section level4">
 <h4>Turbidity</h4>
-<p>The turbidity() analyzes a raw dataset for exceedances of a threshold on a 30 minute window of data to flag windows that are above of the threshold. Thresholds are based on the 99th percentile of turbidity data collected from each gage prior to construction beginning. The background data window varies based on gage installation date, but all gages were analyzed from late summer to fall 2017 to February 2018. All gages measured turbidity over many storm events, which bolster background data ranges. The turbidity() replaces data that is outside of the normal expected range for a turbidity sensor in freshwater (0-1500 FNU) to avoid probe malfunctions from skewing analyses. If the input dataset (after replacement) does not meet the minimum 30 minute window criteria, it is not analyzed for the maximum threshold within 30 minute rule. The rolling window calculations are applied to the upstream and downstream gage datasets separately such that if one gage does not meet the window criteria, the other gage can still be analyzed.</p>
+<p>The turbidity() analyzes a raw dataset for variances on a 30 minute window of data to flag windows for further investigation. Criteria are based on the 99th percentile of turbidity data collected from each gage prior to construction beginning. The background data window varies based on gage installation date, but all gages were analyzed from late summer to fall 2017 through February 2018. All gages measured turbidity over many storm events, which bolster background data ranges. The turbidity() replaces data that is outside of the normal expected range for a turbidity sensor in freshwater (0-1500 FNU) to avoid probe malfunctions from skewing analyses. If the input dataset (after replacement) does not meet the minimum 30 minute window criteria, it is not analyzed for the maximum criteria within the 30 minute rule. The rolling window calculations are applied to the upstream and downstream gage datasets separately such that if one gage does not meet the window criteria, the other gage can still be analyzed.</p>
 <p>First, the function ensures turbidity data (Turb_Inst) was retrieved from each gage. If a gage has not recorded turbidity data within the data window, the turbidity fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA’s for the data window being analyzed.</p>
 <p>The upstream and downstream data are joined together (using dplyr::full_join as to not lose any records if one of the gages does not have a record for a time that matches the other gage). Next, data outside the expected range is replaced with NA’s and the upstream/downstream numeric and percent difference is calculated. The turbidity_valid30minuteWindow is the amount of time captured by lagging the data by 6 rows (i.e. calculating the amount of time the tq_mutate() will be rolling over). <strong>Rolling windows across time series data is very difficult</strong> Due to computational limitations, we assume the dataset is complete, meaning data was transmitted for every 5 minute interval within the hour. This assumption is critical to efficiently run any time series analysis scripts. <strong>If data is missing within the hour</strong>, turbidity_valid30minuteWindow will report a number higher than 30 (30 would be expected for a valid 30 minute window). Given how the tq_mutate() is programmed, one would never expect a number less than 30. One should not disregard data with turbidity_valid30minuteWindow close to an exact 30 minute result, it still contains valuable information. turbidity_NAs record how many NA’s are produced when comparing the upstream and downstream turbidity measures. A NA indicates no data was available for one of the measured periods for one or both gages. Later QA steps do not pass along notifications for windows that have too many NA’s. More on those QA steps later.</p>
-<p>To ensure the tq_mutate() does not fail, joined upstream/downstream datasets that contain less than a 30 minute window are skipped and given NA’s for the appropriate turbidity upstream/downstream comparison columns. If the dataset contains at least 30 minutes of valid data, the turbidityBaseline variable is used to determine which method is used to analyze data. Baseline turbidity thesholds are calculated by taking the maximum of the median upstream turbidity and median downstream turbidity measures over the two hour data window. For gage pairs with background turbidity &lt;= 40 FNU threshold, turbidityNumericThreshold() is used to calculate numeric differences between gages and sum all missing data. Flags are triggered if the downstream gage turbidity is &gt;= 6 FNU than the upstream gage for at least 30 minutes within the download window. For gage pairs with background turbidity &gt; 40 FNU, turbidityPercentThreshold() is used to calculate percent differences between the gages and sum all missing data. Flags are triggered if the downstream gage turbidity is &gt;= 15% FNU than the upstream gage for at least 30 minutes within the download window. The method used for comparison is reported in the turbidity_ExceedanceType column as either ‘Numeric’ or ‘Percent.’ The 30 minute window criteria rules out natural perturbations (e.g. leaves or other materials temporarily skewing turbidity measures from the probes).</p>
-<p>The gages are then analyzed individually for instances above their unique 99th percentile threshold. Again, these 99 percentiles are calculated from each background gage dataset from installation in 2017 to February 2018. If either gage has less than 30 minutes of valid data, the gage is not run against the 99th percentile threshold. The number of NA’s within the valid 30 minute window is reported in turbidity_upstreamNAs or turbidity_downstreamNAs, respectively.</p>
+<p>To ensure the tq_mutate() does not fail, joined upstream/downstream datasets that contain less than a 30 minute window are skipped and given NA’s for the appropriate turbidity upstream/downstream comparison columns. If the dataset contains at least 30 minutes of valid data, the turbidityBaseline variable is used to determine which method is used to analyze data. <strong>Baseline turbidity levels are calculated by taking the maximum of the median upstream turbidity and median downstream turbidity measures over the data window.</strong> For gage pairs with background turbidity &lt;= 40 FNU, turbidityNumericFlag() is used to calculate numeric differences between gages and sum all missing data. Flags are triggered if the downstream gage turbidity is &gt;= 6 FNU compared to the upstream gage for at least 30 minutes within the download window. For gage pairs with background turbidity &gt; 40 FNU, turbidityPercentFlag() is used to calculate percent differences between the gages and sum all missing data. Flags are triggered if the downstream gage turbidity is &gt;= 15% FNU than the upstream gage for at least 30 minutes within the download window. The method used for comparison is reported in the turbidity_FlagType column as either ‘Numeric’ or ‘Percent.’ The 30 minute window criteria rules out natural perturbations (e.g. leaves or other materials temporarily skewing turbidity measures from the probes).</p>
+<p>The gages are then analyzed individually for instances above their unique 99th percentile criteria. Again, these 99th percentiles are calculated from each background gage dataset from installation in 2017 to February 2018. If either gage has less than 30 minutes of valid data, the gage is not run against the 99th percentile threshold. The number of NA’s within the valid 30 minute window is reported in turbidity_upstreamNAs or turbidity_downstreamNAs, respectively.</p>
 <pre class="r"><code>turbidity &lt;- function(upstreamData, downstreamData, parameter, turbidityBaseline, turbidity99th1, turbidity99th2){
   # only run function if Turbidity data came from both datasets
   if(unique(c(&#39;Turb_Inst&#39;,&quot;Turb_Inst_cd&quot;) %in% names(upstreamData))){
@@ -744,7 +744,7 @@ return(x)
            window= lag(dateTime,6),
            turbidity_valid30minuteWindow=dateTime-lag(dateTime,6)) # lag 6 bc lag already grabs 1 row above
   
-  # Calculate Baseline Turbidity for 2hr window 
+  # Calculate Baseline Turbidity for window 
   #######Old method, but bombs if no data present: if(!all(is.na(together$upstream)) | !all(is.na(together$downstream))){
   if( all( !all(is.na(together$upstream)) , !all(is.na(together$downstream)) ) ){
     turbidityBaseline &lt;- max(median(together$upstream,na.rm=T),median(together$downstream,na.rm=T))
@@ -753,9 +753,9 @@ return(x)
   
   # if &lt; 7 records the rolling functions will fail, report out NA&#39;s if not enough data to run full metrics
   if(nrow(together)&lt;7){
-    tidyverse_diff_rollstats &lt;- mutate(together,turbidity_Exceedance=as.numeric(NA),turbidity_NAs=as.numeric(NA),
-                                       turbidity_ExceedanceType=as.numeric(NA),turbidity_upstreamExceed99th=as.numeric(NA),
-                                       turbidity_downstreamExceed99th=as.numeric(NA))
+    tidyverse_diff_rollstats &lt;- mutate(together,turbidity_Flag=as.numeric(NA),turbidity_NAs=as.numeric(NA),
+                                       turbidity_FlagType=as.numeric(NA),turbidity_upstreamFlag99th=as.numeric(NA),
+                                       turbidity_downstreamFlag99th=as.numeric(NA))
     }else{
       if(turbidityBaseline &lt;= 40){
         tidyverse_diff_rollstats &lt;- together %&gt;%
@@ -766,9 +766,9 @@ return(x)
             width      = 7,
             align      = &quot;right&quot;,
             by.column  = FALSE,
-            FUN        = turbidityNumericThreshold,
+            FUN        = turbidityNumericFlag,
             # FUN args
-            threshold  = 5.999999999) %&gt;% mutate(turbidity_ExceedanceType=paste(&#39;Numeric; baseline=&#39;,turbidityBaseline))
+            threshold  = 5.999999999) %&gt;% mutate(turbidity_FlagType=paste(&#39;Numeric; baseline=&#39;,turbidityBaseline))
       }else{
         tidyverse_diff_rollstats &lt;- together %&gt;%
           tq_mutate(
@@ -778,13 +778,13 @@ return(x)
             width      = 7,
             align      = &quot;right&quot;,
             by.column  = FALSE,
-            FUN        = turbidityPercentThreshold, 
+            FUN        = turbidityPercentFlag, 
             # FUN args
-            threshold  = 14.99999999) %&gt;% mutate(turbidity_ExceedanceType=paste(&#39;Percent; baseline=&#39;,turbidityBaseline))
+            threshold  = 14.99999999) %&gt;% mutate(turbidity_FlagType=paste(&#39;Percent; baseline=&#39;,turbidityBaseline))
       }}
   #  Prevent tq_mutate from bombing out if entire dataset fed to it is NA&#39;s
   if(nrow(filter(together,!is.na(upstream))) &lt; 7){
-    tidyverse_diff_rollstats &lt;- mutate(tidyverse_diff_rollstats,turbidity_upstreamExceed99th=NA,turbidity_upstreamNAs=NA)
+    tidyverse_diff_rollstats &lt;- mutate(tidyverse_diff_rollstats,turbidity_upstreamFlag99th=NA,turbidity_upstreamNAs=NA)
   }else{
     # Exceed 99th percentile upstream or downstream
     tidyverse_diff_rollstats &lt;- tidyverse_diff_rollstats %&gt;%
@@ -795,16 +795,16 @@ return(x)
         width      = 7,
         align      = &quot;right&quot;,
         by.column  = FALSE,
-        FUN        = turbidityNumericThreshold,
+        FUN        = turbidityNumericFlag,
         # FUN args
         threshold  = turbidity99th1) %&gt;%
-      rename(turbidity_upstreamExceed99th=turbidity_Exceedance..1,turbidity_upstreamNAs=turbidity_NAs..1)
+      rename(turbidity_upstreamFlag99th=turbidity_Flag..1,turbidity_upstreamNAs=turbidity_NAs..1)
      #for &lt; R version 3.6.0
-     #rename(turbidity_upstreamExceed99th=turbidity_Exceedance.1,turbidity_upstreamNAs=turbidity_NAs.1)
+     #rename(turbidity_upstreamFlag99th=turbidity_Flag.1,turbidity_upstreamNAs=turbidity_NAs.1)
   }
   #  Prevent tq_mutate from bombing out if entire dataset fed to it is NA&#39;s
   if(nrow(filter(together,!is.na(downstream))) &lt; 7){
-    tidyverse_diff_rollstats &lt;- mutate(tidyverse_diff_rollstats,turbidity_downstreamExceed99th=NA,turbidity_downstreamNAs=NA)
+    tidyverse_diff_rollstats &lt;- mutate(tidyverse_diff_rollstats,turbidity_downstreamFlag99th=NA,turbidity_downstreamNAs=NA)
   }else{
     tidyverse_diff_rollstats &lt;- tidyverse_diff_rollstats %&gt;%
       tq_mutate(
@@ -814,563 +814,49 @@ return(x)
         width      = 7,
         align      = &quot;right&quot;,
         by.column  = FALSE,
-        FUN        = turbidityNumericThreshold,
+        FUN        = turbidityNumericFlag,
         # FUN args
         threshold  = turbidity99th2) %&gt;%
-       rename(turbidity_downstreamExceed99th=turbidity_Exceedance..1,turbidity_downstreamNAs=turbidity_NAs..1) 
+       rename(turbidity_downstreamFlag99th=turbidity_Flag..1,turbidity_downstreamNAs=turbidity_NAs..1) 
       #for &lt; R version 3.6.0
-      #rename(turbidity_downstreamExceed99th=turbidity_Exceedance.1,turbidity_downstreamNAs=turbidity_NAs.1) 
+      #rename(turbidity_downstreamFlag99th=turbidity_Flag.1,turbidity_downstreamNAs=turbidity_NAs.1) 
   }
   return(tidyverse_diff_rollstats)
 }</code></pre>
 </div>
 <div id="data-scan" class="section level4">
 <h4>Data Scan</h4>
-<p>Each of the functions defined above works independently to review raw data from their respective parameter; however, incorporating these separate functions into a single function to analyze pairs of gages allows us to utilize the the real processing power of R. The dataScan() takes raw data from an upstream and downstream gage as well as user inputs for each gage’s WQS class (WQclassGage1 &amp; WQclassGage2), any pH special standards and upstream/downstream range allowances (pHspecialStandards &amp; pHrangeAllowance), the specific conductivity designation (SpCond_Designation), nearest gage height (GH_Inst), and baseline turbidity (turbidityBaseline) and appropriate 99th percentiles (turbidity99th1, turbidity99th2). The output of dataScan() is a combination of all the individual parameter function outputs, merging all available data across parameters, with flags associated data that are outside of the defined threshold for that gage.</p>
+<p>Each of the functions defined above works independently to review raw data from their respective parameter; however, incorporating these separate functions into a single function to analyze pairs of gages allows us to utilize the the real processing power of R. The dataScan() takes raw data from an upstream and downstream gage as well as user inputs for each gage’s WQS class (WQclassGage1 &amp; WQclassGage2), any pH special standards and upstream/downstream range allowances (pHspecialStandards &amp; pHrangeAllowance), the specific conductivity designation (SpCond_Designation), nearest gage height (GH_Inst), and appropriate 99th percentiles (turbidity99th1, turbidity99th2). The output of dataScan() is a combination of all the individual parameter function outputs, merging all available data across parameters, flagging data worthy of further review for each gage.</p>
 <pre class="r"><code>## Apply threshold exceedance functions across time series, multitple parameters
 dataScan &lt;- function(upstreamData, downstreamData, WQclassGage1, WQclassGage2, pHspecialStandards, pHrangeAllowance, SpCond_Designation, turbidityBaseline, turbidity99th1, turbidity99th2){
   
   ## Temperature Analysis ##
   T_Results &lt;- temperature(upstreamData,downstreamData,&#39;Wtemp_Inst&#39;,WQclassGage1,WQclassGage2) %&gt;% # will have to preprogram WQS class depending on site
-    select(agency_cd,dateTime,site_no.x,site_no.y,WQSapplied,T_valid1hrWindow,T_upstreamMaxViolation,T_downstreamMaxViolation,
-           T_upstreamHourlyChangeViolation,T_upstreamNAs,T_downstreamHourlyChangeViolation,T_downstreamNAs,T_riseAboveNaturalViolation)
+    select(agency_cd,dateTime,site_no.x,site_no.y,WQSapplied,T_valid1hrWindow,T_upstreamMaxFlag,T_downstreamMaxFlag,
+           T_upstreamHourlyChangeFlag,T_upstreamNAs,T_downstreamHourlyChangeFlag,T_downstreamNAs,T_riseAboveNaturalFlag)
   
   ## Dissolved Oxygen Analysis ##
   DO_Results &lt;- dissolvedOxygen(upstreamData,downstreamData,&#39;DO_Inst&#39;,WQclassGage1,WQclassGage2) %&gt;% # will have to preprogram WQS class depending on site
-    select(agency_cd,dateTime,site_no.x,site_no.y,DO_upstreamMinViolation,DO_downstreamMinViolation,DO_upDownDifferenceViolation)
+    select(agency_cd,dateTime,site_no.x,site_no.y,DO_upstreamMinFlag,DO_downstreamMinFlag,DO_upDownDifferenceFlag)
   
   ## pH Analysis ##
   pH_Results &lt;- pH(upstreamData,downstreamData,&#39;pH_Inst&#39;,pHspecialStandards,pHrangeAllowance) %&gt;% # will have to preprogram WQS special standards depending on site
-    select(agency_cd,dateTime,site_no.x,site_no.y,pH_upstreamViolation,pH_downstreamViolation,pH_upDownDifferenceViolation)
+    select(agency_cd,dateTime,site_no.x,site_no.y,pH_upstreamFlag,pH_downstreamFlag,pH_upDownDifferenceFlag)
   
   ## Specific Conductivity Analysis ##
   spCond_Results &lt;- SpCond(upstreamData,downstreamData,&#39;SpecCond_Inst&#39;, SpCond_Designation) %&gt;% 
-    select(agency_cd,dateTime,site_no.x,site_no.y,spCond_upstreamViolation,spCond_downstreamViolation,spCond_upDownNumericDifferenceViolation,
-           spCond_upDownPercentDifferenceViolation)
+    select(agency_cd,dateTime,site_no.x,site_no.y,spCond_upstreamFlag,spCond_downstreamFlag,spCond_upDownNumericDifferenceFlag,
+           spCond_upDownPercentDifferenceFlag)
   
   ## Turbidity Analysis ##
   # Choose turbidity method based on baseline parameter value
   turbidity_Results &lt;- turbidity(upstreamData, downstreamData, &#39;Turb_Inst&#39;, turbidityBaseline, turbidity99th1, turbidity99th2) %&gt;% 
-    select(agency_cd,dateTime,site_no.x,site_no.y,site_noGH,GH_Inst,turbidity_valid30minuteWindow,turbidity_NAs,turbidity_ExceedanceType,turbidity_Exceedance,
-           turbidity_upstreamExceed99th,turbidity_upstreamNAs,turbidity_downstreamExceed99th,turbidity_downstreamNAs)
+    select(agency_cd,dateTime,site_no.x,site_no.y,site_noGH,GH_Inst,turbidity_valid30minuteWindow,turbidity_NAs,turbidity_FlagType,turbidity_Flag,
+           turbidity_upstreamFlag99th,turbidity_upstreamNAs,turbidity_downstreamFlag99th,turbidity_downstreamNAs)
   
   allParameters &lt;- plyr::join_all(list(T_Results,DO_Results, pH_Results, spCond_Results, turbidity_Results),by=c(&#39;agency_cd&#39;,&#39;dateTime&#39;,&#39;site_no.x&#39;,&#39;site_no.y&#39;))
   
   return(allParameters)
-}</code></pre>
-<p>###Notification Functions</p>
-<p>After analyzing the raw NWIS data for each upstream/downstream gage pair, it is necessary to send information of exceedances to scientists for further review. Twitter is an efficient and secure way to send information from the R console to a specific list of users. The secure connection from R to Twitter is established through <a href="https://oauth.net/2/">OAuth2.0</a>, which creates a unique ‘handshake’ between R and Twitter each time data is passed between the two applications. The Twitter app associated with the R environment uses a random character strings to establish a consumer key, consumer secret key, access token, and access secret token to link the applications. These four random strings are private to the R developer and prevent an other user from being able to tweet to the linked Twitter handle.</p>
-<p>Tweeting messages from R to a protected Twitter handle ensures only users approved by the Twitter handle administrator (the R script developer) have access to the information reported to the Twitter feed. The Twitter feed also acts as an archive for any approved user to see what has triggered notifications in the past. The unique identifier (UID) noted in each tweet matches to the name of the flat file saved from R with the data responsible for triggering the tweet. Additionally, a Twitter feed does not limit the number of notifications send from R within a time period, unlike most email or SMS text notification options. Twitter is the only secure option currently available to match the speed with which R analyzes and outputs notifications. Other SMTP email/text options are limited by the number or volume of notifications available within a time period (typically 24 hours).</p>
-<p>The following functions are used within other functions to significantly reduce the amount of code required to convert the output of gageResults() to tweets that are understandable by any authorized user.</p>
-<p>Based on column name, output upstream or downstream gage number.</p>
-<pre class="r"><code>updownDifference &lt;-function(colName,gageResults){
-  if(length(grep(&#39;upstream&#39;,colName))){
-    return(unique(gageResults$site_no.x)[!is.na(unique(gageResults$site_no.x))])}
-  if(length(grep(&#39;downstream&#39;,colName))){
-    return(unique(gageResults$site_no.y)[!is.na(unique(gageResults$site_no.y))])}}  </code></pre>
-<p>Based on column name, output parameter code (for weblink).</p>
-<pre class="r"><code>parameterCodeDecipher &lt;- function(colName){
-  if(length(grep(&#39;T&#39;,colName,ignore.case = F))){return(&#39;00010&#39;)}
-  if(length(grep(&#39;DO&#39;,colName,ignore.case = F))){return(&#39;00300&#39;)}
-  if(length(grep(&#39;pH&#39;,colName,ignore.case = F))){return(&#39;00400&#39;)}
-  if(length(grep(&#39;spCond&#39;,colName,ignore.case = F))){return(&#39;00095&#39;)}
-  if(length(grep(&#39;turbidity&#39;,colName,ignore.case = F))){return(&#39;63680&#39;)}}</code></pre>
-<p>Based on gage number, output stream name.</p>
-<pre class="r"><code>gageNumberToStream &lt;- function(gageNumber){
-  gageInfo[grep(as.numeric(gageNumber),gageInfo$`USGS Station ID`),]$`Stream Name`[1]}</code></pre>
-</div>
-</div>
-<div id="functions-for-tweeting" class="section level3">
-<h3>Functions for Tweeting</h3>
-<p>The functions below utilize the functions defined above to convert information output from the gageResults() to tweets with an appropriate stream name, parameter notification, and UID as well as web link to the NWIS server with the associated gage, parameter, and data window of interest automatically established.</p>
-<div id="send-tweet-for-any-metrics-that-require-5-min-exceedance-for-notification." class="section level4">
-<h4>Send tweet for any metrics that require 5 min exceedance for notification.</h4>
-<p>The anyExceedance() subsets the gageResults() output for metrics that are allowed to send notifications with as little as a single 5 minute flag. These metrics are maxima and minima exceedances for temperature, dissolved oxygen, pH, and specific conductivity that require further data review before warranting any action. The function first establishes the appropriate stream name, parameter notification, and UID and necessary inputs to the NWIS server to link to a page that graphs the appropriate gage(s), parameter(s), and data window. The anyExceedance() only sends a tweet if at least one flag is present for a metric in the gageResults() output. Additionally, the function saves a copy of the gageResults() and raw data responisble for sending the notification in a flat file. The UID from the tweet can be matched to the flat file name if any review of raw data or analysis is required at a later point in time.</p>
-<pre class="r"><code>anyExceedance &lt;- function(gageResults,upstreamData,downstreamData){
-  minmaxData &lt;- select(gageResults,dateTime,site_no.x,site_no.y,T_upstreamMaxViolation,
-                       T_downstreamMaxViolation,T_riseAboveNaturalViolation,DO_upstreamMinViolation,
-                       DO_downstreamMinViolation,DO_upDownDifferenceViolation,
-                       pH_upstreamViolation,pH_downstreamViolation,pH_upDownDifferenceViolation,
-                       spCond_upstreamViolation,spCond_downstreamViolation,
-                       spCond_upDownNumericDifferenceViolation,spCond_upDownPercentDifferenceViolation)
-  
-  for(i in 4:length(minmaxData)){# start at 4 bc first columns are gage numbers and date
-    if(!all(is.na(minmaxData[,i]))){# skip column if all values are NA
-      columnName &lt;- colnames(minmaxData)[i]
-      PCcolName &lt;- gsub(&quot;Violation&quot;,&quot;DataReview&quot;,columnName) # PC name for tweet
-      date1 &lt;- as.Date(minmaxData$dateTime[1])-3 # Need to hardwire date into link so get same results well after original notification
-      date2 &lt;- as.Date(minmaxData$dateTime[1]) # Need to hardwire date into link so get same results well after original notification
-      parameterCode &lt;- parameterCodeDecipher(columnName) # change parameter from column name to USGS parameter code for link
-      uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-      if(length(grep(&#39;T&#39;,columnName,ignore.case = F))){selection &lt;- c(&quot;Wtemp_Inst&quot;,&quot;Wtemp_Inst_cd&quot;)}
-      if(length(grep(&#39;DO&#39;,columnName,ignore.case = F))){selection &lt;- c(&quot;DO_Inst&quot;,&quot;DO_Inst_cd&quot;)}
-      if(length(grep(&#39;pH&#39;,columnName,ignore.case = F))){selection &lt;- c(&quot;pH_Inst&quot;,&quot;pH_Inst_cd&quot;)}
-      if(length(grep(&#39;spCond&#39;,columnName,ignore.case = F))){selection &lt;- c(&quot;SpecCond_Inst&quot;,&quot;SpecCond_Inst_cd&quot;)}
-      if(length(grep(&#39;turbidity&#39;,columnName,ignore.case = F))){selection &lt;- c(&quot;Turb_Inst&quot;,&quot;Turb_Inst_cd&quot;)}
-      
-      
-      if(length(grep(&quot;riseAboveNatural&quot;,columnName)) &gt; 0 | length(grep(&#39;upDown&#39;,columnName)) &gt; 0){
-        gageNumber1 &lt;- unique(minmaxData$site_no.x)[!is.na(unique(minmaxData$site_no.x))]
-        gageNumber2 &lt;- unique(minmaxData$site_no.y)[!is.na(unique(minmaxData$site_no.y))]
-        streamName &lt;- gageInfo[grep(as.numeric(gageNumber1),gageInfo$`USGS Station ID`),]$`Stream Name`[1]
-        weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                         &#39;&amp;cb_&#39;,parameterCode,&#39;=on&amp;site_no=&#39;,gageNumber1,&#39;%2C&#39;,gageNumber2,&#39;&amp;format=gif_mult_sites&#39;,sep=&#39;&#39;)
-        datToSave &lt;- minmaxData[,c(1:3,i)]
-        upstreamRAW &lt;- select(upstreamData,site_no,dateTime,selection)
-        names(upstreamRAW)[c(1,3:4)] &lt;- paste(names(upstreamRAW)[c(1,3:4)],&quot;.x&quot;,sep=&quot;&quot;)
-        downstreamRAW &lt;- select(downstreamData,site_no,dateTime,selection)
-        names(downstreamRAW)[c(1,3:4)] &lt;- paste(names(downstreamRAW)[c(1,3:4)],&quot;.y&quot;,sep=&quot;&quot;)
-        datToSave &lt;- plyr::join_all(list(datToSave,upstreamRAW,downstreamRAW),by=&#39;dateTime&#39;)
-      }else{
-        gageNumber &lt;- updownDifference(columnName,minmaxData)
-        streamName &lt;- gageInfo[grep(as.numeric(gageNumber),gageInfo$`USGS Station ID`),]$`Stream Name`[1]
-        weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                         &#39;&amp;cb_&#39;,parameterCode,&#39;=on&amp;site_no=&#39;,gageNumber,sep = &quot;&quot;)
-        #Pull together data to save for archive
-        if(length(grep(&#39;upstream&#39;,columnName)) &gt; 0){
-          otherRAWdata  &lt;- select(upstreamData,dateTime,site_no,selection)
-          datToSave &lt;- minmaxData[,c(1:2,i)] %&gt;%
-            full_join(otherRAWdata,by=&#39;dateTime&#39;)}
-        if(length(grep(&#39;downstream&#39;,columnName)) &gt; 0){
-          otherRAWdata  &lt;- select(downstreamData,dateTime,site_no,selection)
-          datToSave &lt;- minmaxData[,c(1,3,i)] %&gt;%
-            full_join(otherRAWdata,by=&#39;dateTime&#39;)}
-      }
-      if(1 %in% minmaxData[,i]){ # If there is a single 5 min violation for a metric, send tweet and save analysis
-        tweet(paste(streamName,PCcolName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T)
-        write.csv(datToSave,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)}
-    }}
-}</code></pre>
-</div>
-<div id="tweet-if-any-temperature-hourly-change-noted-based-on-stream-wqs" class="section level4">
-<h4>Tweet if any temperature hourly change noted (based on stream WQS)</h4>
-<p>The tempTimeTweet() subsets the gageResults() output for temperature hourly change metrics. For these metric to flag, there must be a hourly stream temperature change noted above the WQS for the segment on which the gage is located. The hour window is verified and any hour windows noting 4 or more NA’s (more than one third of the data missing) are discounted prior to sending a tweet. After removing invalid windows of data, any flags of temperature change above the appropriate threshold sustained for one hour (or longer) will send a tweet. These notifications are triggered by valid upstream or downstream flags.</p>
-<p>If a notification is necessary, the function establishes the appropriate stream name, parameter notification, and UID and necessary inputs to the NWIS server to link to a page that graphs the appropriate gage(s), parameter, and data window. Additionally, the function saves a copy of the gageResults() and raw data responisble for sending the notification in a flat file. The UID from the tweet can be matched to the flat file name if any review of raw data or analysis is required at a later point in time.</p>
-<pre class="r"><code>tempTimeTweet &lt;- function(gageResults,upstreamData,downstreamData){
-  tempTimeData &lt;- select(gageResults,dateTime,site_no.x,site_no.y,WQSapplied,T_valid1hrWindow,
-                         T_upstreamHourlyChangeViolation,T_upstreamNAs,
-                         T_downstreamHourlyChangeViolation,T_downstreamNAs)
-  
-  # Only use data from correct 1hr window
-  validData &lt;- filter(tempTimeData,T_valid1hrWindow==60)
-  if(nrow(validData)&gt;0){
-    # Upstream Analysis
-    validUP &lt;- filter(validData,T_upstreamHourlyChangeViolation&gt;0, # Limit dataset to only violations
-                      T_upstreamNAs &lt;=4) # Only allow up to 4 missing Temperature reading per hour for any hour to count toward max change rate violation
-    # Only send tweet if at least 1 valid row (1 hr violation) &amp; &lt;= 4 missing Temperature readings within hour
-    if(nrow(validUP)&gt;0){
-      uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-      PCcolName &lt;- &#39;T_upstreamHourlyChangeDataReview&#39;
-      gageNumber &lt;- unique(validData$site_no.x)[!is.na(unique(validData$site_no.x))]
-      streamName &lt;- gageInfo[grep(as.numeric(gageNumber),gageInfo$`USGS Station ID`),]$`Stream Name`[1]
-      date1 &lt;- as.Date(validData$dateTime[1])-3 # Need to hardwire date into link so get same results well after original notification
-      date2 &lt;- as.Date(validData$dateTime[1]) # Need to hardwire date into link so get same results well after original notification
-      weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       &#39;&amp;cb_00010=on&amp;site_no=&#39;,gageNumber,sep = &quot;&quot;)
-      tweet(paste(streamName,PCcolName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T)
-      # Save a record of the data that caused the tweet, indexed by uniqueTweetIdentifier
-      datToSave &lt;- tempTimeData[,c(1,2,4:7)]
-      upstreamRAW &lt;- select(upstreamData,site_no,dateTime,Wtemp_Inst,Wtemp_Inst_cd) %&gt;%
-        dplyr::rename(site_no.x=site_no,Wtemp_Inst.x=Wtemp_Inst,Wtemp_Inst_cd.x=Wtemp_Inst_cd)
-      datToSave &lt;- plyr::join_all(list(datToSave,upstreamRAW),by=&#39;dateTime&#39;)
-      write.csv(datToSave,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)
-    }
-    # Downstream Analysis
-    validDOWN &lt;- filter(validData,T_downstreamHourlyChangeViolation&gt;0, # Limit dataset to only violations
-                        T_downstreamNAs &lt;=4) # Only allow up to 4 missing Temperature reading per hour for any hour to count toward max change rate violation
-    # Only send tweet if at least 1 valid row (1 hr violation) &amp; &lt;= 4 missing Temperature readings within hour
-    if(nrow(validDOWN)&gt;0){
-      uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-      PCcolName &lt;- &#39;T_downstreamHourlyChangeDataReview&#39;
-      gageNumber &lt;- unique(validData$site_no.y)[!is.na(unique(validData$site_no.y))]
-      streamName &lt;- gageInfo[grep(as.numeric(gageNumber),gageInfo$`USGS Station ID`),]$`Stream Name`[1]
-      date1 &lt;- as.Date(validData$dateTime[1])-3 # Need to hardwire date into link so get same results well after original notification
-      date2 &lt;- as.Date(validData$dateTime[1]) # Need to hardwire date into link so get same results well after original notification
-      weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       &#39;&amp;cb_00010=on&amp;site_no=&#39;,gageNumber,sep = &quot;&quot;)
-      tweet(paste(streamName,PCcolName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T)
-      # Save a record of the data that caused the tweet, indexed by uniqueTweetIdentifier
-      datToSave &lt;- tempTimeData[,c(1,3:5,8,9)]
-      downstreamRAW &lt;- select(downstreamData,site_no,dateTime,Wtemp_Inst,Wtemp_Inst_cd) %&gt;%
-        dplyr::rename(site_no.y=site_no,Wtemp_Inst.y=Wtemp_Inst,Wtemp_Inst_cd.y=Wtemp_Inst_cd)
-      datToSave &lt;- plyr::join_all(list(datToSave,downstreamRAW),by=&#39;dateTime&#39;)
-      write.csv(datToSave,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)}
-  }
-}</code></pre>
-</div>
-<div id="tweet-if-any-turbidity-30-minute-change-noted-based-on-median-baseline-turbidity-and-99th-percentile-thresholds" class="section level4">
-<h4>Tweet if any turbidity 30 minute change noted (based on median baseline turbidity and 99th percentile thresholds)</h4>
-<p>The turbTimeTweet() subsets the gageResults() output for turbidity metrics. For these metrics to trigger a notification, there must be turbidity measures sustained above the numeric or percent threshold (see Turbidity above for more information on when each threshold is implemented) or above the gage’s 99th percentile threshold for at least 30 minutes. The 30 minute window is verified and any 30 minute windows noting 3 or more NA’s (more than 40% of the data missing) are discounted prior to sending a tweet. After removing invalid windows of data, any flags of turbidity above the appropriate threshold sustained for at least 30 minutes sends a tweet. These notifications are triggered by valid upstream or downstream flags and by valid upstream/downstream flagged comparisons.</p>
-<p>If a notification is necessary, the function establishes the appropriate stream name, parameter notification, and UID and necessary inputs to the NWIS server to link to a page that graphs the appropriate gage(s), parameter, and data window. A plot of the turbidity data and associated gage height (from nearest gage) is presented for at least the last 24 hours to give context to the flagged turbidity data. The two hour window that breaks the threshold is specifically highlighted on the plot send with the tweet. Additionally, the function saves a copy of the gageResults(), plot, and raw data responisble for sending the notification in a flat file. The UID from the tweet can be matched to the flat file name and plot name if any review of raw data or analysis is required at a later point in time.</p>
-<p>Turbidity tweeting helper functions for data manipulation and seamless plotting.</p>
-<pre class="r"><code>dataManipulationForTurbTweets_2hr &lt;- function(upstreamData,downstreamData,turbidity99th1,turbidity99th2){
-  if(unique(c(&#39;Turb_Inst&#39;,&quot;Turb_Inst_cd&quot;) %in% names(upstreamData))){
-    UP &lt;- dplyr::select(upstreamData,agency_cd,site_no,dateTime,&#39;Turb_Inst&#39;)%&gt;%rename(upstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
-    # If gage height data available at gage then grab that, too
-    if(&quot;GH_Inst&quot; %in% names(upstreamData)){
-      if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]==&quot;0205450393&quot;){
-        gh &lt;- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%&gt;%
-          mutate(site_noGH=&#39;02054500&#39;)%&gt;% dplyr::select(agency_cd,site_noGH,everything(),-site_no)
-      }else{
-        gh &lt;- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%&gt;%
-          rename(site_noGH=!!names(.[2]))}
-      
-    }else{gh &lt;- dplyr::select(upstreamData,agency_cd,dateTime)%&gt;%
-      mutate(site_noGH=NA,GH_Inst=NA)%&gt;%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}
-  }else{UP &lt;- select(upstreamData,agency_cd,site_no,dateTime)%&gt;%mutate(upstream=NA)}
-  if(unique(c(&#39;Turb_Inst&#39;,&quot;Turb_Inst_cd&quot;) %in% names(downstreamData))){
-    DOWN &lt;- dplyr::select(downstreamData,agency_cd,site_no,dateTime,&#39;Turb_Inst&#39;)%&gt;%rename(downstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
-    # If gage height data available at gage then grab that, too
-    if(&quot;GH_Inst&quot; %in% names(downstreamData)){
-      gh &lt;- dplyr::select(downstreamData,agency_cd,site_no,dateTime,GH_Inst) %&gt;%
-        rename(site_noGH=!!names(.[2]))
-    }else{
-      if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]==&quot;0205450393&quot;){
-        gh &lt;- gh}
-      if(exists(&#39;gh&#39;)){gh &lt;- gh}else{
-        gh &lt;- dplyr::select(downstreamData,agency_cd,dateTime)%&gt;%
-          mutate(site_noGH=NA,GH_Inst=NA)%&gt;%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}}
-    
-  }else{DOWN &lt;- select(downstreamData,agency_cd,site_no,dateTime)%&gt;%mutate(downstream=NA)}
-  
-  together &lt;- full_join(UP,DOWN,by=c(&#39;agency_cd&#39;,&#39;dateTime&#39;))%&gt;%
-    full_join(gh,by=c(&#39;agency_cd&#39;,&#39;dateTime&#39;)) %&gt;%
-    mutate(turbidity99th1=turbidity99th1,turbidity99th2=turbidity99th2)
-  return(together)
-}
-
-
-dataManipulationForTurbTweets_2days &lt;- function(upstreamData,downstreamData,turbidity99th1,turbidity99th2){
-  if(unique(c(&#39;Turb_Inst&#39;,&quot;Turb_Inst_cd&quot;) %in% names(upstreamData))){
-    UP &lt;- dplyr::select(upstreamData,agency_cd,site_no,dateTime,&#39;Turb_Inst&#39;)%&gt;%rename(upstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
-    # If gage height data available at gage then grab that, too
-    if(&quot;GH_Inst&quot; %in% names(upstreamData)){
-      if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]==&quot;0205450393&quot;){
-        gh &lt;- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%&gt;%
-          mutate(site_noGH=&#39;02054500&#39;)%&gt;% dplyr::select(agency_cd,site_noGH,everything(),-site_no)
-      }else{
-        gh &lt;- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%&gt;%
-          rename(site_noGH=!!names(.[2]))}
-      
-    }else{gh &lt;- dplyr::select(upstreamData,agency_cd,dateTime)%&gt;%
-      mutate(site_noGH=NA,GH_Inst=NA)%&gt;%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}
-  }else{UP &lt;- select(upstreamData,agency_cd,site_no,dateTime)%&gt;%mutate(upstream=NA)}
-  if(unique(c(&#39;Turb_Inst&#39;,&quot;Turb_Inst_cd&quot;) %in% names(downstreamData))){
-    DOWN &lt;- dplyr::select(downstreamData,agency_cd,site_no,dateTime,&#39;Turb_Inst&#39;)%&gt;%rename(downstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
-    # If gage height data available at gage then grab that, too
-    if(&quot;GH_Inst&quot; %in% names(downstreamData)){
-      gh &lt;- dplyr::select(downstreamData,agency_cd,site_no,dateTime,GH_Inst) %&gt;%
-        rename(site_noGH=!!names(.[2]))
-    }else{
-      if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]==&quot;0205450393&quot;){
-        gh &lt;- gh}
-      if(exists(&#39;gh&#39;)){gh &lt;- gh}else{
-        gh &lt;- dplyr::select(downstreamData,agency_cd,dateTime)%&gt;%
-          mutate(site_noGH=NA,GH_Inst=NA)%&gt;%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}}
-    
-  }else{DOWN &lt;- select(downstreamData,agency_cd,site_no,dateTime)%&gt;%mutate(downstream=NA)}
-  
-  
-  together &lt;- full_join(UP,DOWN,by=c(&#39;agency_cd&#39;,&#39;dateTime&#39;))%&gt;%
-    full_join(gh,by=c(&#39;agency_cd&#39;,&#39;dateTime&#39;)) %&gt;%
-    mutate(turbidity99th1=turbidity99th1,turbidity99th2=turbidity99th2)
-  return(together)
-}
-
-pairedTurbidityPlot_2days &lt;- function(turbidityData,turbidity99th1,turbidity99th2){
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] ==
-     unique(turbidityData$site_no.x)[!is.na(unique(turbidityData$site_no.x))]){updown &lt;- &quot;Upstream&quot;}
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] ==
-     unique(turbidityData$site_no.y)[!is.na(unique(turbidityData$site_no.y))]){updown &lt;- &quot;Downstream&quot;}
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] == &quot;02054500&quot;){
-    updown &lt;- &#39;Lafayette&#39;}
-  
-  up &lt;- dplyr::select(turbidityData,dateTime,upstream)%&gt;%
-    gather(gage,measure,upstream)%&gt;%mutate(Turbidity99=turbidity99th1,panel=2)#&#39;Upstream Turbidity (NTU)&#39;)
-  down &lt;- dplyr::select(turbidityData,dateTime,downstream)%&gt;%
-    gather(gage,measure,downstream)%&gt;%mutate(Turbidity99=turbidity99th2,panel=3)#&#39;Downstream Turbidity (NTU)&#39;)
-  gh &lt;- dplyr::select(turbidityData,dateTime,GH_Inst)%&gt;%
-    rename(measure=GH_Inst)%&gt;% mutate(gage=updown,Turbidity99=NA,panel=1)%&gt;% select(dateTime,gage,Turbidity99,measure,panel)#paste(updown,&#39;Gage Height (ft)&#39;,sep=&#39; &#39;)) 
-  dat &lt;- rbind(up,down,gh)
-  dat2 &lt;- dplyr::filter(dat,dateTime &gt;= last2Hours &amp; panel==2) %&gt;%
-    mutate(a=min(dateTime),b=max(dateTime),c=min(measure,na.rm=T),
-           d=max(max(measure,na.rm=T),max(Turbidity99)))
-  dat3 &lt;- dplyr::filter(dat,dateTime &gt;= last2Hours &amp; panel==3) %&gt;%
-    mutate(a=min(dateTime),b=max(dateTime),c=min(measure,na.rm=T),
-           d=max(max(measure,na.rm=T),max(Turbidity99)))
-  correctName &lt;- c(`1`=paste(updown,&#39;Gage Height (ft)&#39;,sep=&#39; &#39;),
-                   `2`=&#39;Upstream Turbidity (NTU)&#39;,`3`=&#39;Downstream Turbidity (NTU)&#39;)
-  
-  
-  plot3_alldata2hr &lt;- ggplot(dat,mapping = aes(x=dateTime,y=measure))+
-    facet_grid(panel~.,scale=&#39;free&#39;,labeller = as_labeller(correctName))+
-    geom_rect(data=dat2,aes(xmin=a,xmax=b,ymin=c,ymax=d,fill=TRUE),
-              alpha=0.2)+
-    geom_rect(data=dat3,aes(xmin=a,xmax=b,ymin=c,ymax=d,fill=TRUE),
-              alpha=0.2)+
-    
-    geom_point(data=up,stat = &#39;identity&#39;,colour=&#39;coral&#39;)+
-    geom_line(data=up,aes(dateTime,Turbidity99),colour=&#39;red&#39;)+
-    
-    geom_point(data=down,stat = &#39;identity&#39;,colour=&#39;blueviolet&#39;)+
-    geom_line(data=down,aes(dateTime,Turbidity99),colour=&#39;blue&#39;)+
-    geom_point(data=gh,stat = &#39;identity&#39;,colour=&#39;gray&#39;) +
-    
-    
-    scale_fill_manual(values=&#39;gray&#39;)+guides(fill=F)
-  return(plot3_alldata2hr)
-}
-
-
-upstreamTurbidityPlot2day &lt;- function(turbidityData,turbidity99th1){
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] ==
-     unique(turbidityData$site_no.x)[!is.na(unique(turbidityData$site_no.x))]){updown &lt;- &quot;Upstream&quot;}
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] ==
-     unique(turbidityData$site_no.y)[!is.na(unique(turbidityData$site_no.y))]){updown &lt;- &quot;Downstream&quot;}
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] == &quot;02054500&quot;){
-    updown &lt;- &#39;Lafayette&#39;}
-  
-  up &lt;- dplyr::select(turbidityData,dateTime,upstream)%&gt;%
-    gather(gage,measure,upstream)%&gt;%mutate(Turbidity99=turbidity99th1,panel=2)#&#39;Upstream Turbidity (NTU)&#39;)
-  gh &lt;- dplyr::select(turbidityData,dateTime,GH_Inst)%&gt;%
-    rename(measure=GH_Inst)%&gt;% mutate(gage=updown,Turbidity99=NA,panel=1)%&gt;% select(dateTime,gage,Turbidity99,measure,panel)#paste(updown,&#39;Gage Height (ft)&#39;,sep=&#39; &#39;)) 
-  dat &lt;- rbind(up,gh)
-  dat2 &lt;- dplyr::filter(dat,dateTime &gt;= last2Hours &amp; panel==2) %&gt;%
-    mutate(a=min(dateTime),b=max(dateTime),c=min(measure,na.rm=T),
-           d=max(max(measure,na.rm=T),max(Turbidity99)))
-  correctName &lt;- c(`1`=paste(updown,&#39;Gage Height (ft)&#39;,sep=&#39; &#39;),
-                   `2`=&#39;Upstream Turbidity (NTU)&#39;)
-  
-  upstream2dayplot &lt;- ggplot(dat,mapping = aes(x=dateTime,y=measure))+
-    facet_grid(panel~.,scale=&#39;free&#39;,labeller = as_labeller(correctName))+
-    geom_rect(data=dat2,aes(xmin=a,xmax=b,ymin=c,ymax=d,fill=TRUE),
-              alpha=0.2)+
-    geom_point(data=up,stat = &#39;identity&#39;,colour=&#39;coral&#39;)+
-    geom_line(data=up,aes(dateTime,Turbidity99),colour=&#39;red&#39;)+
-    geom_point(data=gh,stat = &#39;identity&#39;,colour=&#39;gray&#39;) +
-    scale_fill_manual(values=&#39;gray&#39;)+guides(fill=F)
-  return(upstream2dayplot)
-}
-
-
-downstreamTurbidityPlot2day &lt;- function(turbidityData,turbidity99th2){
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] ==
-     unique(turbidityData$site_no.x)[!is.na(unique(turbidityData$site_no.x))]){updown &lt;- &quot;Upstream&quot;}
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] ==
-     unique(turbidityData$site_no.y)[!is.na(unique(turbidityData$site_no.y))]){updown &lt;- &quot;Downstream&quot;}
-  if(unique(turbidityData$site_noGH)[!is.na(unique(turbidityData$site_noGH))] == &quot;02054500&quot;){
-    updown &lt;- &#39;Lafayette&#39;}
-  
-  down &lt;- dplyr::select(turbidityData,dateTime,downstream)%&gt;%
-    gather(gage,measure,downstream)%&gt;%mutate(Turbidity99=turbidity99th2,panel=3)#&#39;Downstream Turbidity (NTU)&#39;)
-  gh &lt;- dplyr::select(turbidityData,dateTime,GH_Inst)%&gt;%
-    rename(measure=GH_Inst)%&gt;% mutate(gage=updown,Turbidity99=NA,panel=1)%&gt;% select(dateTime,gage,Turbidity99,measure,panel)#paste(updown,&#39;Gage Height (ft)&#39;,sep=&#39; &#39;)) 
-  dat &lt;- rbind(down,gh)
-  dat3 &lt;- dplyr::filter(dat,dateTime &gt;= last2Hours &amp; panel==3) %&gt;%
-    mutate(a=min(dateTime),b=max(dateTime),c=min(measure,na.rm=T),
-           d=max(max(measure,na.rm=T),max(Turbidity99)))
-  correctName &lt;- c(`1`=paste(updown,&#39;Gage Height (ft)&#39;,sep=&#39; &#39;),`3`=&#39;Downstream Turbidity (NTU)&#39;)
-  
-  
-  downstream2dayplot &lt;- ggplot(dat,mapping = aes(x=dateTime,y=measure))+
-    facet_grid(panel~.,scale=&#39;free&#39;,labeller = as_labeller(correctName))+
-    geom_rect(data=dat3,aes(xmin=a,xmax=b,ymin=c,ymax=d,fill=TRUE),
-              alpha=0.2)+
-    geom_point(data=down,stat = &#39;identity&#39;,colour=&#39;blueviolet&#39;)+
-    geom_line(data=down,aes(dateTime,Turbidity99),colour=&#39;blue&#39;)+
-    geom_point(data=gh,stat = &#39;identity&#39;,colour=&#39;gray&#39;) +
-    scale_fill_manual(values=&#39;gray&#39;)+guides(fill=F)
-  return(downstream2dayplot)
-}</code></pre>
-<p>Turbidity tweeting function</p>
-<pre class="r"><code># Turbidity tweet
-turbTimeTweet &lt;- function(gageResults,upstreamData,downstreamData,turbidity99th1,turbidity99th2,
-                          upstreamDataForTurbidity,downstreamDataForTurbidity){
-  turbTimeData &lt;- select(gageResults,dateTime,site_no.x,site_no.y,site_noGH,GH_Inst,WQSapplied,turbidity_valid30minuteWindow,
-                         turbidity_NAs,turbidity_ExceedanceType,turbidity_Exceedance,
-                         turbidity_upstreamExceed99th,turbidity_upstreamNAs,
-                         turbidity_downstreamExceed99th,turbidity_downstreamNAs)
-  
-  # Only use data from correct 1hr window
-  validData &lt;- filter(turbTimeData,turbidity_valid30minuteWindow==30)
-  
-  # upstream downstream change comparison
-  if(nrow(validData)&gt;0){
-    validComparison &lt;- filter(validData,turbidity_Exceedance&gt;0, # Limit dataset to only violations
-                              turbidity_NAs &lt;= 3) # Only allow up to 3 missing turbidity reading per hour for any hour to count toward max change rate violation
-    
-    # Data manipulation for plots
-    together &lt;- dataManipulationForTurbTweets_2hr(upstreamData,downstreamData,turbidity99th1,turbidity99th2)
-    together2days &lt;- dataManipulationForTurbTweets_2days(upstreamDataForTurbidity,downstreamDataForTurbidity,turbidity99th1,turbidity99th2)
-    
-    if(nrow(validComparison)&gt;0){
-      uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-      PCcolName &lt;- &#39;turbidity_upstreamDownstreamDataReview&#39;
-      date1 &lt;- as.Date(validData$dateTime[1])-3 # Need to hardwire date into link so get same results well after original notification
-      date2 &lt;- as.Date(validData$dateTime[1]) # Need to hardwire date into link so get same results well after original notification
-      gageNumber1 &lt;- unique(validData$site_no.x)[!is.na(unique(validData$site_no.x))]
-      gageNumber2 &lt;- unique(validData$site_no.y)[!is.na(unique(validData$site_no.y))]
-      streamName &lt;- gageInfo[grep(as.numeric(gageNumber1),gageInfo$`USGS Station ID`),]$`Stream Name`[1]
-      weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       &#39;&amp;cb_63680=on&amp;site_no=&#39;,gageNumber1,&#39;%2C&#39;,gageNumber2,&#39;&amp;format=gif_mult_sites&#39;,sep=&#39;&#39;)
-      file_name &lt;- paste(&#39;notifications/images/&#39;,uniqueTweetIdentifier,&#39;.jpg&#39;,sep=&#39;&#39;)
-      jpeg(file_name)
-      print(pairedTurbidityPlot_2days(together2days,turbidity99th1,turbidity99th2))
-      dev.off()
-      
-      tweet(paste(streamName,PCcolName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T,
-            mediaPath=paste(&#39;notifications/images/&#39;,uniqueTweetIdentifier,&#39;.jpg&#39;,sep=&#39;&#39;))
-      # Save a record of the data that caused the tweet, indexed by uniqueTweetIdentifier
-      write.csv(together,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)
-    }
-    
-    # Upstream absolute threshold Analysis
-    validUP &lt;- filter(validData,turbidity_upstreamExceed99th&gt;0, # Limit dataset to only violations
-                      turbidity_upstreamNAs &lt;=3) # Only allow up to 3 missing turbidity reading per hour for any hour to count toward max change rate violation
-    # Only send tweet if at least 1 valid row (1 hr violation) &amp; &lt;= 3 missing turbidity readings within hour
-    if(nrow(validUP)&gt;0){
-      uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-      PCcolName &lt;- &#39;turbidity_upstreamExceed99th&#39;
-      gageNumber &lt;- unique(validData$site_no.x)[!is.na(unique(validData$site_no.x))]
-      streamName &lt;- gageInfo[grep(as.numeric(gageNumber),gageInfo$`USGS Station ID`),]$`Stream Name`[1]
-      date1 &lt;- as.Date(validData$dateTime[1])-3 # Need to hardwire date into link so get same results well after original notification
-      date2 &lt;- as.Date(validData$dateTime[1]) # Need to hardwire date into link so get same results well after original notification
-      weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       &#39;&amp;cb_63680=on&amp;site_no=&#39;,gageNumber,sep = &quot;&quot;)
-      file_name &lt;- paste(&#39;notifications/images/&#39;,uniqueTweetIdentifier,&#39;.jpg&#39;,sep=&#39;&#39;)
-      jpeg(file_name)
-      print(upstreamTurbidityPlot2day(together2days,turbidity99th1))
-      dev.off()
-      tweet(paste(streamName,PCcolName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T,
-            mediaPath=paste(&#39;notifications/images/&#39;,uniqueTweetIdentifier,&#39;.jpg&#39;,sep=&#39;&#39;))
-      # Save a record of the data that caused the tweet, indexed by uniqueTweetIdentifier
-      datToSave &lt;- turbTimeData[,c(1,2,7,11,12)]
-      upstreamRAW &lt;- dplyr::select(together,-c(site_no.y,downstream))
-      datToSave &lt;- plyr::join_all(list(datToSave,upstreamRAW),by=&#39;dateTime&#39;)
-      write.csv(datToSave,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)
-    }
-    # Downstream Analysis
-    validDOWN &lt;- filter(validData,turbidity_downstreamExceed99th&gt;0, # Limit dataset to only violations
-                        turbidity_downstreamNAs &lt;=3) # Only allow up to 3 missing turbidity reading per hour for any hour to count toward max change rate violation
-    # Only send tweet if at least 1 valid row (1 hr violation) &amp; &lt;= 4 missing turbidity readings within hour
-    if(nrow(validDOWN)&gt;0){
-      uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-      PCcolName &lt;- &#39;turbidity_downstreamExceed99th&#39;
-      gageNumber &lt;- unique(validData$site_no.x)[!is.na(unique(validData$site_no.x))]
-      streamName &lt;- gageInfo[grep(as.numeric(gageNumber),gageInfo$`USGS Station ID`),]$`Stream Name`[1]
-      date1 &lt;- as.Date(validData$dateTime[1])-3 # Need to hardwire date into link so get same results well after original notification
-      date2 &lt;- as.Date(validData$dateTime[1]) # Need to hardwire date into link so get same results well after original notification
-      weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       &#39;&amp;cb_63680=on&amp;site_no=&#39;,gageNumber,sep = &quot;&quot;)
-      file_name &lt;- paste(&#39;notifications/images/&#39;,uniqueTweetIdentifier,&#39;.jpg&#39;,sep=&#39;&#39;)
-      jpeg(file_name)
-      print(downstreamTurbidityPlot2day(together2days,turbidity99th2))
-      dev.off()
-      tweet(paste(streamName,PCcolName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T,
-            mediaPath=paste(&#39;notifications/images/&#39;,uniqueTweetIdentifier,&#39;.jpg&#39;,sep=&#39;&#39;))
-      # Save a record of the data that caused the tweet, indexed by uniqueTweetIdentifier
-      datToSave &lt;- turbTimeData[,c(1,3,7,13,14)]
-      downstreamRAW &lt;- dplyr::select(together,-c(site_no.x,upstream))
-      datToSave &lt;- plyr::join_all(list(datToSave,downstreamRAW),by=&#39;dateTime&#39;)
-      write.csv(datToSave,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)}
-  }
-}</code></pre>
-</div>
-<div id="tweet-if-no-data-is-received-from-gage-or-gage-pairs-during-a-data-pull" class="section level4">
-<h4>Tweet if no data is received from gage or gage pairs during a data pull</h4>
-<p>The noGageDataTweet() notifies authorized Twitter users when a gage or pair of gages does not send any data to the NWIS server for a particular data pull. By notifying the users when gages are not pushing data to the NWIS server for a particular time period, DEQ staff can notify USGS data managers of gage malfuntions or potential foul play.</p>
-<p>The gageResults() will output very limited information if one or both of the gages have not produced data in the specified window. If no gage is retrieved for either or both gages, the noGageDataTweet() determines which stream and which gage(s) did not produce data, identifies the time period where the data is missing, and constructs a weblink (or weblinks) to the NWIS server highlighting when the problem occurred. Additionally, the function saves a copy of the gageResults() and any raw data responisble for sending the notification in a flat file. The UID from the tweet can be matched to the flat file name if any review of raw data or analysis is required at a later point in time.</p>
-<pre class="r"><code># Send Notification if no data could be compared upstream/downstream for pull
-noGageDataTweet &lt;- function(gageResults,i,last2Hours){
-  if(nrow(filter(gageResults,!is.na(site_no.x))) == 0 | nrow(filter(gageResults,!is.na(site_no.y))) == 0){
-    uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-    date1 &lt;- as.Date(last2Hours)-3 # Need to hardwire date into link so get same results well after original notification
-    date2 &lt;- as.Date(last2Hours) # Need to hardwire date into link so get same results well after original notification
-    parameterCode &lt;- &#39;&amp;cb_00010=on&amp;cb_00095=on&amp;cb_00300=on&amp;cb_00400=on&amp;cb_63680=on&#39;
-    
-    # find Culprit
-    if(nrow(filter(gageResults,!is.na(site_no.x))) == 0){
-      columnName &lt;- &#39;upstreamNoData&#39;
-      gageNumberMissing &lt;- paste(0,gageInfo$`USGS Station ID`[i],sep = &quot;&quot;)
-      streamName &lt;- gageInfo$`Stream Name`[i]}
-    if(nrow(filter(gageResults,!is.na(site_no.y))) == 0){
-      columnName &lt;- &#39;downstreamNoData&#39;
-      gageNumberMissing &lt;- paste(0,gageInfo$`USGS Station ID`[i+1],sep = &quot;&quot;)
-      streamName &lt;- gageInfo$`Stream Name`[i]}
-    if(nrow(filter(gageResults,!is.na(site_no.x))) == 0 &amp;
-       nrow(filter(gageResults,!is.na(site_no.y))) == 0){columnName &lt;- &#39;NoData&#39;}
-    # If both gages are missing, give special tweet
-    if(columnName==&#39;NoData&#39;){
-      streamName &lt;- gageInfo$`Stream Name`[i]
-      gageNumberMissing1 &lt;- paste(0,gageInfo$`USGS Station ID`[i],sep=&quot;&quot;)
-      gageNumberMissing2 &lt;- paste(0,gageInfo$`USGS Station ID`[i+1],sep = &quot;&quot;)
-      weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       parameterCode,&#39;&amp;site_no=&#39;,gageNumberMissing1,sep = &quot;&quot;)
-      weblink2 &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                        parameterCode,&#39;&amp;site_no=&#39;,gageNumberMissing2,sep = &quot;&quot;)
-      tweet(paste(streamName,columnName,weblink,&quot; &amp; &quot;,weblink2,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T)
-      # fix gageResults so we know which gages blank data associated with
-      gageResults$site_no.x &lt;- gageNumberMissing1
-      gageResults$site_no.y &lt;- gageNumberMissing2
-      }else{weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       parameterCode,&#39;&amp;site_no=&#39;,gageNumberMissing,sep = &quot;&quot;)}
-    
-    tweet(paste(streamName,columnName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T)
-    
-    # Save a record of the data that caused the tweet, indexed by uniqueTweetIdentifier
-    write.csv(gageResults,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)}
-}</code></pre>
-</div>
-<div id="tweet-if-no-turbidity-data-is-received-from-gage-or-gage-pairs-during-a-data-pull" class="section level4">
-<h4>Tweet if no turbidity data is received from gage or gage pairs during a data pull</h4>
-<p>The noTurbidityDataTweet() notifies authorized Twitter users when a gage or pair of gages does not send any turbidity data to the NWIS server for a particular data pull. By notifying the users when gages are not pushing turbidity data to the NWIS server for a particular time period, DEQ staff can notify USGS data managers of gage malfuntions or potential foul play.</p>
-<p>The gageResults() will output very limited information if one or both of the gages have not produced data in the specified window. If no gage is retrieved for either or both gages, the noGageDataTweet() determines which stream and which gage(s) did not produce data, identifies the time period where the data is missing, and constructs a weblink (or weblinks) to the NWIS server highlighting when the problem occurred. Additionally, the function saves a copy of the gageResults() and any raw data responisble for sending the notification in a flat file. The UID from the tweet can be matched to the flat file name if any review of raw data or analysis is required at a later point in time.</p>
-<pre class="r"><code># Send Notification if no turbidity data received
-noTurbidityDataTweet &lt;- function(gageResults,i,last2Hours){
-  turbidityData &lt;- dplyr::select(gageResults,agency_cd,dateTime,site_no.x,site_no.y,site_noGH,GH_Inst,
-                                 turbidity_valid30minuteWindow,turbidity_NAs,turbidity_ExceedanceType,
-                                 turbidity_Exceedance,turbidity_upstreamExceed99th,turbidity_upstreamNAs,
-                                 turbidity_downstreamExceed99th,turbidity_downstreamNAs)
-  
-  
-  
-  if(nrow(filter(turbidityData,!is.na(site_no.x))) == 0 | nrow(filter(turbidityData,!is.na(site_no.y))) == 0){
-    uniqueTweetIdentifier &lt;- format(as.numeric(Sys.time()),nsmall=4) # Tweet function will not work if the status is the same as a previous status
-    date1 &lt;- as.Date(last2Hours)-3 # Need to hardwire date into link so get same results well after original notification
-    date2 &lt;- as.Date(last2Hours) # Need to hardwire date into link so get same results well after original notification
-    parameterCode &lt;- &#39;&amp;cb_63680=on&#39;
-    
-    # find Culprit
-    if(nrow(filter(gageResults,!is.na(site_no.x))) == 0){
-      columnName &lt;- &#39;upstreamNoTurbidityData&#39;
-      gageNumberMissing &lt;- paste(0,gageInfo$`USGS Station ID`[i],sep = &quot;&quot;)
-      streamName &lt;- gageInfo$`Stream Name`[i]}
-    if(nrow(filter(gageResults,!is.na(site_no.y))) == 0){
-      columnName &lt;- &#39;downstreamNoTurbidityData&#39;
-      gageNumberMissing &lt;- paste(0,gageInfo$`USGS Station ID`[i+1],sep = &quot;&quot;)
-      streamName &lt;- gageInfo$`Stream Name`[i]}
-    if(nrow(filter(gageResults,!is.na(site_no.x))) == 0 &amp;
-       nrow(filter(gageResults,!is.na(site_no.y))) == 0){columnName &lt;- &#39;NoTurbidityData&#39;}
-    # If both gages are missing, give special tweet
-    if(columnName==&#39;NoData&#39;){
-      streamName &lt;- gageInfo$`Stream Name`[i]
-      gageNumberMissing1 &lt;- paste(0,gageInfo$`USGS Station ID`[i],sep=&quot;&quot;)
-      gageNumberMissing2 &lt;- paste(0,gageInfo$`USGS Station ID`[i+1],sep = &quot;&quot;)
-      weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                       parameterCode,&#39;&amp;site_no=&#39;,gageNumberMissing1,sep = &quot;&quot;)
-      weblink2 &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                        parameterCode,&#39;&amp;site_no=&#39;,gageNumberMissing2,sep = &quot;&quot;)
-      tweet(paste(streamName,columnName,weblink,&quot; &amp; &quot;,weblink2,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T)
-      # fix gageResults so we know which gages blank data associated with
-      gageResults$site_no.x &lt;- gageNumberMissing1
-      gageResults$site_no.y &lt;- gageNumberMissing2
-    }else{weblink &lt;- paste(&#39;waterdata.usgs.gov/va/nwis/uv?period=&amp;begin_date=&#39;,date1,&#39;&amp;end_date=&#39;,date2,
-                           parameterCode,&#39;&amp;site_no=&#39;,gageNumberMissing,sep = &quot;&quot;)}
-    
-    tweet(paste(streamName,columnName,weblink,&#39;UID:&#39;,uniqueTweetIdentifier,sep=&quot; &quot;),bypassCharLimit=T)
-    
-    # Save a record of the data that caused the tweet, indexed by uniqueTweetIdentifier
-    write.csv(gageResults,paste(&#39;notifications/&#39;,uniqueTweetIdentifier,&#39;.csv&#39;,sep=&quot;&quot;),row.names = F)}
 }</code></pre>
 </div>
 </div>

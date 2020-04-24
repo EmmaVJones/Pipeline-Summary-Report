@@ -1,5 +1,5 @@
 ---
-runtime: shiny
+runtime: shiny_prerendered
 output: 
   html_document:
     theme: flatly
@@ -20,7 +20,7 @@ source('reportFunctions.R')
 source('pipelineSummaryFunctions.R')
 
 # Daily or Weekly report?
-reportType <- 'Weekly' #'Daily' 
+reportType <- 'Daily' #'Weekly' for testing
 reportDurationStart <- if(reportType == 'Daily'){
   Sys.Date()-2
 } else {
@@ -50,7 +50,7 @@ This document summarizes provisional USGS data from upstream/downstream gage pai
 
 
 
-```{r pull/organize function, include=FALSE}
+```{r pull/organize data, include=FALSE}
 startTime <- Sys.time()
 Results <- suppressMessages(
   suppressWarnings(organizeAllGageData(gageInfo, reportDurationStart, reportDurationEnd)))
@@ -224,6 +224,9 @@ DT::datatable(gageInfoPub,extensions = c('Scroller','FixedColumns'), escape=F, r
                                #buttons=list('copy',list(extend='excel',filename='PipelineGageInfo'))
                                ))
 ```
+
+
+
 
 <br>
 

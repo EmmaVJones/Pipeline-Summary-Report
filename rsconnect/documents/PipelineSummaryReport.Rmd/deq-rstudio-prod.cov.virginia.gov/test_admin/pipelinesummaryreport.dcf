@@ -5,9 +5,9 @@ account: test_admin
 server: deq-rstudio-prod.cov.virginia.gov
 hostUrl: http://deq-rstudio-prod.cov.virginia.gov:3939/__api__
 appId: 21
-bundleId: 44
+bundleId: 95
 url: http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineSummaryReport/
-when: 1581104971.96998
+when: 1587730065.59678
 asMultiple: TRUE
 asStatic: FALSE
-ignoredFiles: PipelineSummaryReport_email.Rmd|PipelineSummaryReport_Weekly.Rmd
+ignoredFiles: parameterFunctions.Rmd|PipelineSummaryReport_email.Rmd|PipelineSummaryReport_Weekly.Rmd|PipelineSummaryReport_Weekly_prerendered.Rmd|testPullNWIS_connectServer.Rmd

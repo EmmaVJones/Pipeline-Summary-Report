@@ -27,7 +27,13 @@ library(DT)
 #Results <- suppressMessages(
 #  suppressWarnings(organizeAllGageData(gageInfo, reportDurationStart, reportDurationEnd)))
 
-Results <- readRDS('Results.RDS')
+
+
+
+
+## for testing, if sourcing in .Rmd make sure to use fresh data
+#####
+#Results <- readRDS('Results.RDS')
 
 missingData <- map_df(Results, 'Missing Data') %>%
   mutate(pctMissingData = as.numeric(pctMissingData)) 

@@ -5,9 +5,9 @@ account: test_admin
 server: deq-rstudio-prod.cov.virginia.gov
 hostUrl: http://deq-rstudio-prod.cov.virginia.gov:3939/__api__
 appId: 24
-bundleId: 43
-url: http://deq-rstudio-prod.cov.virginia.gov:3939/content/24/
-when: 1581087642.79588
+bundleId: 45
+url: http://deq-rstudio-prod.cov.virginia.gov:3939/drilldown_pipeline/
+when: 1581109542.8807
 asMultiple: FALSE
 asStatic: FALSE
 ignoredFiles: .httr-oauth|parameterFunctions.html|parameterFunctions.nb.html|parameterFunctions.R|parameterFunctions.Rmd|parameterFunctions[rmd2r].R|parameterFunctions[rmd2r]_EVJ.R|pipelineSummaryFunctions.R|PipelineSummaryReport.html|PipelineSummaryReport.Rmd|PipelineSummaryReport_email.html|PipelineSummaryReport_email.Rmd|PipelineSummaryReport_Weekly.html|PipelineSummaryReport_Weekly.Rmd|plotTest.R|README.md|reportFunctions.R|Results_2020-01-28.RDS|testPullNWIS_connectServer.Rmd|data/gageInfoEVJ.csv|data/littleStony.RDS

@@ -1,7 +1,12 @@
 ## Project build in R 3.6.1
 
 data/
-
+originalLanguage/
+ObjectNameChanges.txt
+*.html
+PipelineSummaryReport_Weekly_prerendered_cache/
+PipelineSummaryReport_Weekly_prerendered_data/
+*.RDS
 
 # History files
 .Rhistory

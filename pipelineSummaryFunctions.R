@@ -118,19 +118,19 @@ organizeAllGageData <- function(gageInfo,
     missingData <- missingData[order(missingData$parameter),]
     
     
-    minmaxData <- select(gageResults,dateTime,site_no.x,site_no.y,T_upstreamMaxViolation,
-                         T_downstreamMaxViolation,T_riseAboveNaturalViolation,DO_upstreamMinViolation,
-                         DO_downstreamMinViolation,DO_upDownDifferenceViolation,
-                         pH_upstreamViolation,pH_downstreamViolation,pH_upDownDifferenceViolation,
-                         spCond_upstreamViolation,spCond_downstreamViolation,
-                         spCond_upDownNumericDifferenceViolation,spCond_upDownPercentDifferenceViolation) %>%
+    minmaxData <- select(gageResults,dateTime,site_no.x,site_no.y,T_upstreamMaxFlag,
+                         T_downstreamMaxFlag,T_riseAboveNaturalFlag,DO_upstreamMinFlag,
+                         DO_downstreamMinFlag,DO_upDownDifferenceFlag,
+                         pH_upstreamFlag,pH_downstreamFlag,pH_upDownDifferenceFlag,
+                         spCond_upstreamFlag,spCond_downstreamFlag,
+                         spCond_upDownNumericDifferenceFlag,spCond_upDownPercentDifferenceFlag) %>%
       filter(dateTime>max(firstUpstreamReading,firstDownstreamReading))
     
     
     dataWindow <- filter(minmaxData,dateTime >= format(reportDurationStart,tz="EST5EDT") & 
                            dateTime <= format(reportDurationEnd,tz="EST5EDT"))
     
-    exceedThreshold <- data.frame(parameter=NA,pctExceedCurrentThreshold=NA, nTweetsSent=NA)
+    exceedThreshold <- data.frame(parameter=NA,pctFlagCurrentThreshold=NA, nTweetsSent=NA)
     
     for(k in 4:length(minmaxData)){# start at 4 bc first columns are gage numbers and date
       # calculate how many tweets were sent hourly and then how many total sent
@@ -159,43 +159,43 @@ organizeAllGageData <- function(gageInfo,
     #  considered to have sent a tweet. More than one violation (or the same parameter) within a single hour
     #  does not trigger more tweets.
     
-    if(nrow(turbidityResults[['upDownNumericExceed']])==0){
+    if(nrow(turbidityResults[['upDownNumericFlag']])==0){
       # give it empty dataframe with no rows
-      nTweets_upDownNumericExceed <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
+      nTweets_upDownNumericFlag <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
     }else{
-      nTweets_upDownNumericExceed <- data.frame(table(cut(turbidityResults[['upDownNumericExceed']]$dateTime,breaks = 'hour'))) %>%
+      nTweets_upDownNumericFlag <- data.frame(table(cut(turbidityResults[['upDownNumericFlag']]$dateTime,breaks = 'hour'))) %>%
         filter(Freq>0)
     }
-    if(nrow(turbidityResults[['upDownPercentExceed']])==0){
+    if(nrow(turbidityResults[['upDownPercentFlag']])==0){
       # give it empty dataframe with no rows
-      nTweets_upDownPercentExceed <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
+      nTweets_upDownPercentFlag <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
     }else{
-      nTweets_upDownPercentExceed <- data.frame(table(cut(turbidityResults[['upDownPercentExceed']]$dateTime,breaks = 'hour'))) %>%
-        filter(Freq>0)
-    }
-    
-    if(nrow(turbidityResults[['upstreamExceed99']])==0){
-      # give it empty dataframe with no rows
-      nTweets_upstreamExceed99  <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
-    }else{
-      nTweets_upstreamExceed99 <- data.frame(table(cut(turbidityResults[['upstreamExceed99']]$dateTime,breaks = 'hour'))) %>%
+      nTweets_upDownPercentFlag <- data.frame(table(cut(turbidityResults[['upDownPercentFlag']]$dateTime,breaks = 'hour'))) %>%
         filter(Freq>0)
     }
     
-    if(nrow(turbidityResults[['downstreamExceed99']])==0){
+    if(nrow(turbidityResults[['upstreamFlag99']])==0){
       # give it empty dataframe with no rows
-      nTweets_downstreamExceed99   <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
+      nTweets_upstreamFlag99  <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
     }else{
-      nTweets_downstreamExceed99 <- data.frame(table(cut(turbidityResults[['downstreamExceed99']]$dateTime,breaks = 'hour'))) %>%
+      nTweets_upstreamFlag99 <- data.frame(table(cut(turbidityResults[['upstreamFlag99']]$dateTime,breaks = 'hour'))) %>%
+        filter(Freq>0)
+    }
+    
+    if(nrow(turbidityResults[['downstreamFlag99']])==0){
+      # give it empty dataframe with no rows
+      nTweets_downstreamFlag99   <- data.frame(Var1=as.factor(character()),Freq=as.integer(character()))
+    }else{
+      nTweets_downstreamFlag99 <- data.frame(table(cut(turbidityResults[['downstreamFlag99']]$dateTime,breaks = 'hour'))) %>%
         filter(Freq>0)
     }
     
     
-    exceedThreshold2 <- cbind(turbidityResults[['exceedThreshold']],
-                              nTweetsSent=c(nrow(nTweets_upDownNumericExceed),
-                                            nrow(nTweets_upDownPercentExceed),
-                                            nrow(nTweets_upstreamExceed99),
-                                            nrow(nTweets_downstreamExceed99)))
+    exceedThreshold2 <- cbind(turbidityResults[['flags']],
+                              nTweetsSent=c(nrow(nTweets_upDownNumericFlag),
+                                            nrow(nTweets_upDownPercentFlag),
+                                            nrow(nTweets_upstreamFlag99),
+                                            nrow(nTweets_downstreamFlag99)))
     exceedThreshold <- rbind(exceedThreshold,exceedThreshold2)
     
     
@@ -214,7 +214,7 @@ organizeAllGageData <- function(gageInfo,
                 `Missing Data` = mutate(missingData,
                                         `Stream Name` = gageInfo$`Stream Name`[j]) %>%
                   dplyr::select(`Stream Name`, everything()),
-                `Threshold Exceedances` = mutate(exceedThreshold,
+                `Threshold Excursions` = mutate(exceedThreshold,
                                                  `Stream Name` = gageInfo$`Stream Name`[j]) %>%
                   dplyr::select(`Stream Name`, everything()))
     Results[[`Stream Name`= gageInfo$`Stream Name`[j]]] <- out
