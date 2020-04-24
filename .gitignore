@@ -7,6 +7,8 @@ ObjectNameChanges.txt
 PipelineSummaryReport_Weekly_prerendered_cache/
 PipelineSummaryReport_Weekly_prerendered_data/
 *.RDS
+rsconnect/
+.gitignore
 
 # History files
 .Rhistory
