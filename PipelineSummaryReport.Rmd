@@ -93,7 +93,7 @@ dataScanForThreshold <- function(ResultsList, DFdesired, whatToFilter, Threshold
 
 ### Parameter Alert 
 
-The parameters listed varied from defined thresholds more than 10% of cases at the sites indicated over the past 24 hours. See the [Monitoring System Functions](http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineMonitoringFunctions/parameterFunctions.html) page for specific thresholds, detailed descriptions, and code of how each analysis is conducted.
+The parameters listed varied from defined thresholds in more than 10% of cases at the sites indicated over the past 24 hours. See the [Monitoring System Functions](http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineMonitoringFunctions/parameterFunctions.html) page for specific thresholds, detailed descriptions, and code of how each analysis is conducted.
 
 ```{r data manipulation, include=FALSE}
 # Calculate Threshold Excursions
@@ -191,7 +191,7 @@ datatable(thresholdExcursions,
 
 ### Missing Data
 
-Data readings were missing in 10% or more cases over the past 24 hours for teh parameters and sites indicated below.
+Data readings were missing in 10% or more of cases over the past 24 hours for the parameters and sites indicated below.
 
 ```{r missingData}
 missingData <- suppressWarnings(

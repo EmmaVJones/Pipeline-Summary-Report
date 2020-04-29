@@ -74,7 +74,7 @@ Notifications that appear in the Parameter Notification table when either of the
     + turbidity_upDownNumericFlag
 2. Where baseline turbidity level are greater than 40 FNU, percent differences are utilized. Downstream turbidity measures of 15% or greater maintained for 30 minutes or more compared to the appropriate upstream gage trigger flags. 
     + turbidity_upDownPercentFlag
-3. Individual gages are compared to their unique 99th percentile criteria. These percentiles are calculated from each background gage dataset from installation date in 2017 to February 2018 (i.e. prior to any construction activities). Measures above a given 99th percentile maintained for at least 30 minutes generate flags.
+3. Individual gages are compared to their unique 99th percentile threshold. These percentiles are calculated from each background gage dataset from installation date in 2017 to February 2018 (i.e. prior to any construction activities). Measures above a given 99th percentile maintained for at least 30 minutes generate flags.
     + turbidity_upstreamFlag99th
     + turbidity_downstreamFlag99th
 
@@ -100,7 +100,7 @@ NWISpull <- function(gageNo,start,end){
 }
 ```
 
-### Criteria Flags
+### Criteria/Threshold Flags
 
 These functions are used within other functions to significantly reduce the amount of code required to do said analyses.
 
@@ -113,7 +113,7 @@ numericThreshold <- function(x, threshold){
     }else{ifelse(min(x,na.rm=T)>threshold,1,0) })}
 ```
 
-Compare data to a percentage criteria.
+Compare data to a percentage threshold.
 ```{r}
 percentThreshold <- function(x,threshold){  
   suppressWarnings(
@@ -128,7 +128,7 @@ NArecords <- function(x){
 }
 ```
 
-Temperature and turbidity require their own numeric and percentage (in the case of turbidity) criteria flags to efficiently output multiple results from rolling windows when applied to the tidyquant::tq_mutate function.
+Temperature and turbidity require their own numeric and percentage (in the case of turbidity) flags to efficiently output multiple results from rolling windows when applied to the tidyquant::tq_mutate function.
 
 Compare maximum and minimum temperature data to numeric criteria, and output associated NA's. This function is applied to a window of data to find the maximum hourly change according to 9VAC25-260-70.
 
@@ -143,7 +143,7 @@ temperatureHourlyChange <- function(x,threshold){
 ```
 
 
-Compare turbidity data to numeric criteria and output associated NA's.
+Compare turbidity data to numeric threshold and output associated NA's.
 ```{r}
 turbidityNumericFlag <- function(x,threshold){
   exceed <- numericThreshold(x,threshold)
@@ -153,7 +153,7 @@ turbidityNumericFlag <- function(x,threshold){
 }
 ```
 
-Compare turbidity data to percentage criteria and output associated NA's.
+Compare turbidity data to percentage threshold and output associated NA's.
 ```{r}
 turbidityPercentFlag <- function(x,threshold){
   exceed <- numericThreshold(x,threshold)
@@ -353,7 +353,7 @@ pH <- function(upstreamData, downstreamData, parameter, pHspecialStandards, pHra
 
 #### Specific Conductivity
 
-SpCondByDesignation() is a helper function that operates inside SpCond(). The SpCondByDesignation() takes a dataset manipulated by SpCond() and applies the approprate Specific Conductivity criteria. Criteria were developed for each gage by a workgroup of Regional Biologists based on watershed size, local geology, and firsthand knowledge of the macroinvertebrate and fish communities. The criteria designate expectations for specific conductivity readings at 200 uS/cm or 500 uS/cm. Data output in the spCond_upstreamFlag/spCond_downstreamFlag columns flag any specific conductivity values above the maximum criteria for that gage. The spCond_upDownNumericDifferenceFlag flags results where the difference between the upstream/downstream gage pairs is higher than a criteria established by the specific conductivity expectations. The upstream/downstream numeric difference is compared against 50 uS/cm in lower conductivity systems (200 uS/cm) and against 100 uS/cm in higher conductivity systems (500 uS/cm). The spCond_upDownPercentDifferenceFlag column represents the results from comparing the two gages and flags any pairs of measures that are over 20% different for all gage pairs within low conductivity systems. The spCond_upDownPercentDifferenceFlag ignores upstream/downstream percent changes as these generally larger systems can maintain higher differences naturally or during storm events.
+SpCondByDesignation() is a helper function that operates inside SpCond(). The SpCondByDesignation() takes a dataset manipulated by SpCond() and applies the approprate Specific Conductivity threshold. Thresholds were developed for each gage by a workgroup of Regional Biologists based on watershed size, local geology, and firsthand knowledge of the macroinvertebrate and fish communities. The thresholds designate expectations for specific conductivity readings at 200 uS/cm or 500 uS/cm. Data output in the spCond_upstreamFlag/spCond_downstreamFlag columns flag any specific conductivity values above the maximum threshold for that gage. The spCond_upDownNumericDifferenceFlag flags results where the difference between the upstream/downstream gage pairs is higher than a threshold established by the specific conductivity expectations. The upstream/downstream numeric difference is compared against 50 uS/cm in lower conductivity systems (200 uS/cm) and against 100 uS/cm in higher conductivity systems (500 uS/cm). The spCond_upDownPercentDifferenceFlag column represents the results from comparing the two gages and flags any pairs of measures that are over 20% different for all gage pairs within low conductivity systems. The spCond_upDownPercentDifferenceFlag ignores upstream/downstream percent changes as these generally larger systems can maintain higher differences naturally or during storm events.
 
 ```{r}
 SpCondByDesignation <- function(x,SpCond_Designation){
@@ -368,7 +368,7 @@ SpCondByDesignation <- function(x,SpCond_Designation){
 }
 ```
 
-The SpCond() performs QA and manipulation prior to applying SpCondByDesignation() to analyze data against designated specific conductivity criteria. The function ensures specific conductivity data (SpecCond_Inst) was retrieved from each gage. If a gage has not recorded specific conductivity data within the data window, the specific conductivity fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA's for the data window being analyzed.
+The SpCond() performs QA and manipulation prior to applying SpCondByDesignation() to analyze data against designated specific conductivity threshold. The function ensures specific conductivity data (SpecCond_Inst) was retrieved from each gage. If a gage has not recorded specific conductivity data within the data window, the specific conductivity fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA's for the data window being analyzed.
 
 The SpCond() replaces data that is outside of the normal expected range for a specific conductivity sensor in freshwater ( < 0 uS/cm) to avoid probe malfunctions from skewing analyses. 
 
@@ -400,16 +400,16 @@ SpCond <- function(upstreamData, downstreamData, parameter, SpCond_Designation){
 
 
 #### Turbidity
-The turbidity() analyzes a raw dataset for variances on a 30 minute window of data to flag windows for further investigation. Criteria are based on the 99th percentile of turbidity data collected from each gage prior to construction beginning. The background data window varies based on gage installation date, but all gages were analyzed from late summer to fall 2017 through February 2018. All gages measured turbidity over many storm events, which bolster background data ranges. The turbidity() replaces data that is outside of the normal expected range for a turbidity sensor in freshwater (0-1500 FNU) to avoid probe malfunctions from skewing analyses. If the input dataset (after replacement) does not meet the minimum 30 minute window criteria, it is not analyzed for the maximum criteria within the 30 minute rule. The rolling window calculations are applied to the upstream and downstream gage datasets separately such that if one gage does not meet the window criteria, the other gage can still be analyzed. 
+The turbidity() analyzes a raw dataset for variances on a 30 minute window of data to flag windows for further investigation. Thresholds are based on the 99th percentile of turbidity data collected from each gage prior to construction beginning. The background data window varies based on gage installation date, but all gages were analyzed from late summer to fall 2017 through February 2018. All gages measured turbidity over many storm events, which bolster background data ranges. The turbidity() replaces data that is outside of the normal expected range for a turbidity sensor in freshwater (0-1500 FNU) to avoid probe malfunctions from skewing analyses. If the input dataset (after replacement) does not meet the minimum 30 minute window, it is not analyzed for the maximum threshold within the 30 minute rule. The rolling window calculations are applied to the upstream and downstream gage datasets separately such that if one gage does not meet the window rule, the other gage can still be analyzed. 
 
 First, the function ensures turbidity data (Turb_Inst) was retrieved from each gage. If a gage has not recorded turbidity data within the data window, the turbidity fields will not be present and can stop the function from running properly. Thus, if the fields are not there, the function creates said fields and populates them with NA's for the data window being analyzed. 
 
 The upstream and downstream data are joined together (using dplyr::full_join as to not lose any records if one of the gages does not have a record for a time that matches the other gage). Next, data outside the expected range is replaced with NA's and the upstream/downstream numeric and percent difference is calculated. The turbidity_valid30minuteWindow is the amount of time captured by lagging the data by 6 rows (i.e. calculating the amount of time the tq_mutate() will be rolling over). **Rolling windows across time series data is very  difficult** Due to computational limitations, we assume the dataset is complete, meaning data was transmitted for every 5 minute interval within the hour. This assumption is critical to efficiently run any time series analysis scripts. **If data is missing within the hour**, turbidity_valid30minuteWindow will report a number higher than 30 (30 would be expected for a valid 30 minute window). Given how the tq_mutate() is programmed, one would never expect a number less than 30. One should not disregard data with turbidity_valid30minuteWindow close to an exact 30 minute result, it still contains valuable information. turbidity_NAs record how many NA's are produced when comparing the upstream and downstream turbidity measures. A NA indicates no data was available for one of the measured periods for one or both gages. Later QA steps do not pass along notifications for windows that have too many NA's. More on those QA steps later. 
 
 To ensure the tq_mutate() does not fail, joined upstream/downstream datasets that contain less than a 30 minute window are skipped and given NA's for the appropriate turbidity upstream/downstream comparison columns. If the dataset contains at least 30 minutes of valid data, the turbidityBaseline variable is used to determine which method is used to analyze data. **Baseline turbidity levels are calculated by taking the maximum of the median upstream turbidity and median downstream turbidity measures over the data window.** For gage pairs with background turbidity <= 40 FNU, turbidityNumericFlag() is used to calculate numeric differences between gages and sum all missing data. Flags are triggered if the downstream gage turbidity is >= 6 FNU compared to the upstream gage for at least 30 minutes within the download window. For gage pairs with background turbidity > 40 FNU, turbidityPercentFlag() is used to calculate percent differences between the gages and sum all missing data. Flags are triggered if the downstream gage turbidity is >= 15% FNU than the upstream gage for at least 30 minutes within the download window. The method used for comparison is reported in the turbidity_FlagType column as either 'Numeric' or 'Percent.'
-The 30 minute window criteria rules out natural perturbations (e.g. leaves or other materials temporarily skewing turbidity measures from the probes). 
+The 30 minute window minimum window rules out natural perturbations (e.g. leaves or other materials temporarily skewing turbidity measures from the probes). 
 
-The gages are then analyzed individually for instances above their unique 99th percentile criteria. Again, these 99th percentiles are calculated from each background gage dataset from installation in 2017 to February 2018. If either gage has less than 30 minutes of valid data, the gage is not run against the 99th percentile threshold. The number of NA's within the valid 30 minute window is reported in turbidity_upstreamNAs or turbidity_downstreamNAs, respectively.
+The gages are then analyzed individually for instances above their unique 99th percentile thresholds. Again, these 99th percentiles are calculated from each background gage dataset from installation in 2017 to February 2018. If either gage has less than 30 minutes of valid data, the gage is not run against the 99th percentile threshold. The number of NA's within the valid 30 minute window is reported in turbidity_upstreamNAs or turbidity_downstreamNAs, respectively.
 
 
 ```{r}
