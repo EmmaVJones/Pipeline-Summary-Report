@@ -40,18 +40,32 @@ organizeAllGageData <- function(gageInfo,
     # Special step to get gage height from Lafayette gage for Roanoke gage pair only
     # Gage height from Lafayette gage not available before 11/28/2017
     if(paste(0,gageInfo$`USGS Station ID`[j],sep='')=='0205450393'){
+      # Before joining, make sure all columns exists in case no data comes back from one (or both) gages
+      upstreamData <- bind_rows(template, upstreamData)
       upstreamDataLafayette <- NWISpull("02054500",reportDurationStart, reportDurationEnd) %>%
         dplyr::select(dateTime,GH_Inst,GH_Inst_cd)
-      upstreamData <- full_join(upstreamData,upstreamDataLafayette,by='dateTime') %>% 
-        dplyr::select(agency_cd,site_no,dateTime,Wtemp_Inst,Wtemp_Inst_cd,GH_Inst,GH_Inst_cd,everything())
+      upstreamData <- full_join(upstreamData,upstreamDataLafayette,by='dateTime') 
+      # catch if data missing
+      if('Wtemp_Inst' %in% names(upstreamData)){
+        upstreamData <- dplyr::select(upstreamData, agency_cd,site_no,dateTime,Wtemp_Inst,Wtemp_Inst_cd,GH_Inst,GH_Inst_cd,everything())
+      } else {
+        upstreamData <- mutate(upstreamData, Wtemp_Inst = NA,Wtemp_Inst_cd = NA) %>%
+          dplyr::select(agency_cd,site_no,dateTime,Wtemp_Inst,Wtemp_Inst_cd,GH_Inst,GH_Inst_cd,everything())
+      }
       rm(upstreamDataLafayette)
     }
     downstreamData <- NWISpull(paste(0,gageInfo$`USGS Station ID`[j+1],sep=''),
                                reportDurationStart, reportDurationEnd)
     
     # Before joining, make sure all columns exists in case no data comes back from one (or both) gages
-    upstreamData <- bind_rows(template, upstreamData)
-    downstreamData <- bind_rows(template, downstreamData)
+    upstreamData <- bind_rows(template, upstreamData) %>%
+      # and add in appropriate information if missing data in join
+      mutate(site_no = case_when(is.na(site_no) ~ paste0(0,gageInfo$`USGS Station ID`[j]),
+                                   TRUE ~ site_no)) 
+   
+    downstreamData <- bind_rows(template, downstreamData) %>% 
+      mutate(site_no = case_when(is.na(site_no) ~ paste0(0,gageInfo$`USGS Station ID`[j+1]),
+                                   TRUE ~ site_no))
     
     together <- full_join(upstreamData,downstreamData,by=c('agency_cd','dateTime')) %>%
     # and add in appropriate information if missing data in join
@@ -60,7 +74,7 @@ organizeAllGageData <- function(gageInfo,
              site_no.y = case_when(is.na(site_no.y) ~ paste0(0,gageInfo$`USGS Station ID`[j+1]),
                                    TRUE ~ site_no.y))
     
-    
+     
     gageResults <- suppressWarnings(
       dataScan(upstreamData, downstreamData, 
                WQclassGage1 = gageInfo$WQS_Class[j],

@@ -305,35 +305,49 @@ SpCond <- function(upstreamData, downstreamData, parameter, SpCond_Designation){
 
 turbidity <- function(upstreamData, downstreamData, parameter, turbidityBaseline, turbidity99th1, turbidity99th2){
   # only run function if Turbidity data came from both datasets
-  if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(upstreamData))){
-    UP <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,parameter)%>%rename(upstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
-    # If gage height data available at gage then grab that, too
+  if( all( all(is.na(upstreamData$Turb_Inst)) , all(is.na(downstreamData$Turb_Inst)) ) ){
+    UP <- select(upstreamData,agency_cd,site_no,dateTime)%>%mutate(upstream=NA)
+    DOWN <- select(downstreamData,agency_cd,site_no,dateTime)%>%mutate(downstream=NA)
     if("GH_Inst" %in% names(upstreamData)){
-      if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]=="0205450393"){
-        gh <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%>%
-          mutate(site_noGH='02054500')%>% dplyr::select(agency_cd,site_noGH,everything(),-site_no)
-      }else{
-        gh <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%>%
-          rename(site_noGH=!!names(.[2]))}
-      
-    }else{gh <- dplyr::select(upstreamData,agency_cd,dateTime)%>%
-        mutate(site_noGH=NA,GH_Inst=NA)%>%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}
-  }else{UP <- select(upstreamData,agency_cd,site_no,dateTime)%>%mutate(upstream=NA)}
-  if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(downstreamData))){
-    DOWN <- dplyr::select(downstreamData,agency_cd,site_no,dateTime,parameter)%>%rename(downstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
-    # If gage height data available at gage then grab that, too
-    if("GH_Inst" %in% names(downstreamData)){
-      gh <- dplyr::select(downstreamData,agency_cd,site_no,dateTime,GH_Inst) %>%
+      gh <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%>%
         rename(site_noGH=!!names(.[2]))
-    }else{
-      if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]=="0205450393"){
-        gh <- gh}
-      if(exists('gh')){gh <- gh
+    }else {
+      gh <- dplyr::select(downstreamData,agency_cd,site_no,dateTime,GH_Inst) %>%
+        rename(site_noGH=!!names(.[2]))    }
+  } else {
+    if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(upstreamData))){
+      UP <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,parameter)%>%rename(upstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
+      # If gage height data available at gage then grab that, too
+      if("GH_Inst" %in% names(upstreamData)){
+        if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]=="0205450393"){
+          gh <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%>%
+            mutate(site_noGH='02054500')%>% dplyr::select(agency_cd,site_noGH,everything(),-site_no)
+        }else{
+          gh <- dplyr::select(upstreamData,agency_cd,site_no,dateTime,GH_Inst)%>%
+            rename(site_noGH=!!names(.[2]))}
+        
+      }else{gh <- dplyr::select(upstreamData,agency_cd,dateTime)%>%
+        mutate(site_noGH=NA,GH_Inst=NA)%>%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}
+    }else{UP <- select(upstreamData,agency_cd,site_no,dateTime)%>%mutate(upstream=NA)}
+    
+    if(unique(c('Turb_Inst',"Turb_Inst_cd") %in% names(downstreamData))){
+      DOWN <- dplyr::select(downstreamData,agency_cd,site_no,dateTime,parameter)%>%rename(downstream=!!names(.[4])) # change parameter to general name to make further manipulations easier
+      # If gage height data available at gage then grab that, too
+      if("GH_Inst" %in% names(downstreamData)){
+        gh <- dplyr::select(downstreamData,agency_cd,site_no,dateTime,GH_Inst) %>%
+          rename(site_noGH=!!names(.[2]))
       }else{
+        if(unique(upstreamData$site_no)[!is.na(unique(upstreamData$site_no))]=="0205450393"){
+          gh <- gh}
+        if(exists('gh')){gh <- gh
+        }else{
           gh <- dplyr::select(downstreamData,agency_cd,dateTime)%>%
             mutate(site_noGH=NA,GH_Inst=NA)%>%dplyr::select(agency_cd,site_noGH,dateTime,GH_Inst)}}
+    }else{DOWN <- select(downstreamData,agency_cd,site_no,dateTime)%>%mutate(downstream=NA)}
+    
+  }
       
-  }else{DOWN <- select(downstreamData,agency_cd,site_no,dateTime)%>%mutate(downstream=NA)}
+    
   
   together <- full_join(UP,DOWN,by=c('agency_cd','dateTime'))%>%
     full_join(gh,by=c('agency_cd','dateTime')) %>%

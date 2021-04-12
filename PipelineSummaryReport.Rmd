@@ -15,7 +15,8 @@ library(dataRetrieval)
 library(blastula)
 #library(glue)
 
-gageInfo <- read_csv('data/gageInfoEVJ.csv')
+gageInfo <- read_csv('data/gageInfoEVJ.csv') %>% 
+  filter(`Pipeline Name` != 'ACP') ## Addition after ACP gages went offline
 source('parameterFunctions[rmd2r].R') # created with mindr::rmd2r('parameterFunctions.Rmd')
 source('reportFunctions.R')
 source('pipelineSummaryFunctions.R')
@@ -44,7 +45,7 @@ title: "Pipeline Summary Report: `r format(reportDurationStart, '%m/%d/%Y')` - `
 
 ## `r reportType` Report Overview
 
-This document summarizes provisional USGS data from upstream/downstream gage pairs monitoring the MVP and ACP pipeline stream crossings. The report allows users to review flagged results from any of the USGS real time pipeline monitoring gages. At the bottom of the report is a table of all gages monitored for the pipeline monitoring project. Individual gage thresholds unique to each gage are listed in that table.
+This document summarizes provisional USGS data from upstream/downstream gage pairs monitoring the MVP pipeline stream crossings. ACP pipeline stream crossings were removed from this report due to lack of data on 4/12/21. The report allows users to review flagged results from any of the USGS real time pipeline monitoring gages. At the bottom of the report is a table of all gages monitored for the pipeline monitoring project. Individual gage thresholds unique to each gage are listed in that table.
 
 
 DEQ employees may view the report on the [Connect Platform](http://deq-rstudio-prod.cov.virginia.gov/rsconnect/PipelineSummaryReport/PipelineSummaryReport.html) .
