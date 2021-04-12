@@ -1,0 +1,275 @@
+---
+output: 
+  html_document:
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(tidyquant)
+library(crosstalk)
+library(plotly)
+library(DT)
+library(dataRetrieval)
+library(blastula)
+#library(glue)
+
+gageInfo <- read_csv('data/gageInfoEVJ.csv') %>% 
+  filter(`Pipeline Name` != 'ACP') ## Addition after ACP gages went offline
+source('parameterFunctions[rmd2r].R') # created with mindr::rmd2r('parameterFunctions.Rmd')
+source('reportFunctions.R')
+source('pipelineSummaryFunctions.R')
+
+# Daily or Weekly report?
+reportType <- 'Daily' #'Weekly'
+reportDurationStart <- if(reportType == 'Daily'){
+  Sys.Date()-2
+} else {
+  Sys.Date()-8
+}
+
+reportDurationEnd <- Sys.Date()-1
+
+```
+
+
+```{r}
+title_var <- 'Sample Title'
+```
+
+---
+title: "Pipeline Summary Report: `r format(reportDurationStart, '%m/%d/%Y')` - `r format(reportDurationEnd, '%m/%d/%Y')`"
+---
+
+
+***
+
+## `r reportType` Report Overview
+
+This document summarizes provisional USGS data from upstream/downstream gage pairs monitoring the MVP pipeline stream crossings. ACP pipeline stream crossings were removed from this report due to lack of data on 4/12/21. The report allows users to review flagged results from any of the USGS real time pipeline monitoring gages. At the bottom of the report is a table of all gages monitored for the pipeline monitoring project. Individual gage thresholds unique to each gage are listed in that table.
+
+
+DEQ employees may view the report on the [Connect Platform](http://deq-rstudio-prod.cov.virginia.gov/rsconnect/PipelineSummaryReport/PipelineSummaryReport.html) .
+
+
+***
+
+
+```{r pull/organize function, include=FALSE}
+startTime <- Sys.time()
+Results <- suppressMessages(
+  suppressWarnings(organizeAllGageData(gageInfo, reportDurationStart, reportDurationEnd)))
+totalTime <- Sys.time()-startTime
+```
+
+```{r universal function, include=FALSE}
+dataScanForThreshold <- function(ResultsList, DFdesired, whatToFilter, Threshold){
+  # couldnt get quo/enquo to work with lists so just going old skool purrrr
+  
+  if(DFdesired == 'Stream Name'){num <- 1}
+  if(DFdesired == "Raw Data"){num <- 2}
+  if(DFdesired == "gageResults"){num <- 3}
+  if(DFdesired == "Missing Data"){num <- 4}
+  if(DFdesired == "Threshold Excursions"){num <- 5}
+  
+  # choose appropriate map
+  if(num %in% c(4,5)){
+    whatToFilter_en <- enquo(whatToFilter)
+    
+    map_df(ResultsList, num) %>%
+      mutate(filterMe = as.numeric(!! whatToFilter_en)) %>% # fix bc comes in character
+      filter(filterMe >= Threshold)
+  } else{
+    map(ResultsList, num) 
+  }
+}
+
+#z <- dataScanForThreshold(Results, 'gageResults', NA,  50) 
+#dataScanForThreshold(Results, 'Missing Data', pctMissingData, 10) 
+
+```
+
+
+### Parameter Alert 
+
+The parameters listed varied from defined thresholds in more than 10% of cases at the sites indicated over the past 24 hours. See the [Monitoring System Functions](http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineMonitoringFunctions/parameterFunctions.html) page for specific thresholds, detailed descriptions, and code of how each analysis is conducted.
+
+```{r data manipulation, include=FALSE}
+# Calculate Threshold Excursions
+thresholdExcursions <- dataScanForThreshold(Results, 'Threshold Excursions', 
+                                             pctFlagCurrentThreshold, 10) %>%
+  group_by(`Stream Name`) %>%
+  dplyr::select(-c(pctFlagCurrentThreshold, nTweetsSent)) %>%
+  rename('pctFlagCurrentThreshold' ='filterMe') %>%
+  arrange(pctFlagCurrentThreshold) %>%
+  mutate(pctFlagCurrentThreshold = format(pctFlagCurrentThreshold/100, digits = 4) )# get ready for DT
+
+
+## Gage Height Changes for Streams listed above
+gageData <- dataScanForThreshold(Results, 'gageResults', 
+                                 NA, NA) %>%
+  map(., magrittr::extract, c('Stream Name','dateTime','GH_Inst')) %>%
+  map_dfr(., magrittr::extract, c('Stream Name', 'dateTime','GH_Inst')) %>%
+  group_by(`Stream Name`) %>%
+  summarize(`abs(delta GH in ft)` = abs(max(GH_Inst, na.rm = T) - min(GH_Inst, na.rm = T))) 
+
+
+## Based on results above, build link to appropriate Parameters on USGS
+gageTranslation <- dplyr::select(gageInfo, `Stream Name`, `USGS Station ID`) %>%
+  group_by(`Stream Name`) %>%
+  mutate(gageCodes = paste0('0', `USGS Station ID`,collapse ='%2C')) %>%
+  distinct(`Stream Name`, .keep_all = TRUE) %>%
+  dplyr::select(`Stream Name`, gageCodes)
+  
+
+webLink <- mutate(thresholdExcursions, parameterCode = parameter) %>% # duplicate column for joining later
+  separate(parameterCode, into = c('paramCode',NA)) %>%
+  left_join(gageTranslation, by = 'Stream Name') %>%
+  mutate(paramCode = case_when(paramCode %in% c('temp', 'T') ~ '00010', 
+                               paramCode == 'pH' ~ '00400', 
+                               paramCode == 'DO' ~ '00300',
+                               paramCode == 'spCond' ~ '00095', 
+                               paramCode == 'turbidity' ~ '63680')) %>%
+  mutate(# first build the weblink
+    webLink1 = paste0('https://waterdata.usgs.gov/va/nwis/uv?site_no=',
+                      gageCodes,
+                      '&format=gif_mult_sites&PARAmeter_cd=',
+                      paramCode,
+                      "&period=&begin_date=", reportDurationEnd - 7,
+                      "&end_date=",reportDurationEnd), #'&period=7'),
+    # then convert to a html format DT can handle in pretty way
+    `NWIS Web Link` = paste0("<a href='",webLink1, "'>View Data On NWIS</a>")) %>%
+  select(-c(webLink1,pctFlagCurrentThreshold, paramCode, gageCodes))
+
+
+
+## Upcoming Weather Link
+weatherLink <- dplyr::select(gageInfo, `Stream Name`, Latitude, Longitude) %>%
+  distinct(`Stream Name`, .keep_all = TRUE) %>% # just use lat/long from one gage
+  mutate(`NWS Forecast Web Link` = paste0("<a href='https://forecast.weather.gov/MapClick.php?lat=",
+                          Latitude, "&lon=", Longitude,"#.XjRWEc5Kjcs'>NWS 7-day Forecast</a>")) %>%
+  dplyr::select(-c(Latitude, Longitude))
+
+
+
+# Join weblink back to thresholdExcursions
+thresholdExcursions <- left_join(thresholdExcursions, webLink, by = c('Stream Name', 'parameter')) %>%
+  left_join(weatherLink, by = 'Stream Name') %>%
+  # make it more human readable
+  separate(parameter, into = c('Parameter',"Flag")) %>%
+  mutate(Parameter = case_when(Parameter %in% c('temp', 'T','Wtemp')  ~ 'Temperature',
+                               Parameter == 'pH' ~ 'pH',
+                               Parameter == 'DO' ~ 'Dissolved Oxygen',
+                               Parameter %in% c('spCond','SpecCond') ~ 'Specific Conductivity', 
+                               Parameter %in% c('turbidity','Turb') ~ 'Turbidity')) %>%
+  rename('Percent of Data Flagged In Window' = 'pctFlagCurrentThreshold')
+
+```
+
+
+
+
+```{r report results}
+datatable(thresholdExcursions,
+  extensions = c('Scroller'), escape=F, rownames = F,
+  options = list(dom = 't',
+                 pageLength=nrow(thresholdExcursions), 
+                 lengthMenu = c(2, 5, 10, 20),
+                 scrollX = TRUE,
+                 scrollY = 200,
+                 scroller = TRUE#,
+                 #buttons=list('copy',list(extend='excel',filename=paste0(format(Sys.Date(),'%m-%d-%Y'),
+                                                                         #'_thresholdExcursions'))
+                                                                         )) %>%
+  formatPercentage(columns=c('Percent of Data Flagged In Window'), digits = 1)
+
+```
+
+
+
+
+
+### Missing Data
+
+Data readings were missing in 10% or more of cases over the past 24 hours for the parameters and sites indicated below.
+
+```{r missingData}
+missingData <- suppressWarnings(
+  dataScanForThreshold(Results, 'Missing Data', pctMissingData, 10) %>%
+  mutate(`Missing Data` = format(filterMe/100, digits = 4) ) %>%# get ready for DT
+  # make it more human readable
+  separate(parameter, into = c('Parameter','Inst', "Gage")) %>%
+  mutate(Parameter = case_when(Parameter %in% c('temp', 'T','Wtemp')  ~ 'Temperature',
+                               Parameter == 'pH' ~ 'pH',
+                               Parameter == 'DO' ~ 'Dissolved Oxygen',
+                               Parameter %in% c('spCond','SpecCond') ~ 'Specific Conductivity', 
+                               Parameter %in% c('turbidity','Turb') ~ 'Turbidity',
+                               Parameter == 'GH' ~ "Gage Height"),
+         Gage = case_when(Gage == 'upstream' ~ 'Upstream',
+                          Gage == 'downstream'  ~ 'Downstream',
+                          TRUE ~ as.character(Gage))) %>%
+  dplyr::select(-c(pctMissingData, filterMe, Inst)) %>%
+  arrange(`Missing Data`))
+
+datatable(missingData,
+  extensions = c('Scroller'), escape=F, rownames = F,
+  options = list(dom = 't',
+                 pageLength=nrow(missingData), 
+                 lengthMenu = c(2, 5, 10, 20),
+                 scrollX = TRUE,
+                 scrollY = 200,
+                 scroller = TRUE
+                 #buttons=list('copy',list(extend='excel',filename=paste0(format(Sys.Date(),'%m-%d-%Y'),
+                #                                                         '_missingData')))
+                )) %>%
+  formatPercentage(columns=c('Missing Data'), digits = 1)
+
+```
+
+
+### Gage-Specific Thresholds
+
+The below table offers detailed gage information and biologically appropriate thresholds for parameters monitored by the USGS gages (see the [Monitoring System Functions](http://deq-rstudio-prod.cov.virginia.gov:3939/PipelineMonitoringFunctions/parameterFunctions.html) page for more specific field explanations).
+
+```{r gage specific thresholds}
+# make USGS link work
+gageInfoPub <- mutate(gageInfo[1:26,2:23],
+                      `USGS CONMON DATA LINK` = paste0("<a href='",`USGS CONMON DATA LINK`,
+                                                       "'>", `Notes Description`," Gage Overview</a>"))
+
+DT::datatable(gageInfoPub,extensions = c('Scroller','FixedColumns'), escape=F, rownames = F,
+                options = list(dom = 't', pageLength=nrow(gageInfoPub), 
+                               #lengthMenu = c(2, 5, 10, 20),
+                               scroller = TRUE,
+                               scrollX = TRUE,
+                               scrollY = 100,
+                               fixedColumns = list(leftColumns = 2)
+                               #buttons=list('copy',list(extend='excel',filename='PipelineGageInfo'))
+                               ))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r connect_email_setup, echo=FALSE}
+render_connect_email(input = "PipelineSummaryReportBlastulaEmailSimple.Rmd") %>%
+  attach_connect_email(
+    subject = "Pipeline Summary Report From DEQ RStudio Connect Server",
+    attach_output = TRUE#,
+    #attachments = c("dallas_home_sales.csv", "austin_home_sales.csv")
+  )
+```
+
